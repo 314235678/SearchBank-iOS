@@ -415,6 +415,34 @@
     return { stem: stem, raw: cleaned.join("\n") };
   }
 
+  /**
+   * v2.6 增量：从一段自由文本（可能是 OCR 残留 / 用户手贴）中剔除 ABCD 选项，
+   * 只保留首个选项行之前的部分。返回剥离后的字符串；如果没识别到选项，原样返回。
+   * 实现细节：
+   *   - 先按常见分隔符拆行
+   *   - 每行 trim 后做噪声剔除
+   *   - 从头找到第一行匹配 "A./B./C./D." 选项起点时，截断
+   *   - 若没有匹配上选项则返回原文本
+   */
+  function stripOptions(text) {
+    if (!text) return "";
+    var lines = String(text)
+      .replace(/\r\n?/g, "\n")
+      // 兜底：把没有换行的选项也拆出来
+      .replace(/(\s|^)([A-Da-d])[\.、:：]\s*/g, "\n$2. ")
+      .split("\n");
+    var kept = [];
+    for (var i = 0; i < lines.length; i++) {
+      var s = String(lines[i] || "").replace(/[\s\u3000]+/g, " ").trim();
+      if (!s) continue;
+      // 命中"选项起始"立即结束
+      if (/^[A-Da-d]\s*[.、:：]\s*\S|^[A-Da-d]\s+[^\s]/.test(s)) break;
+      kept.push(s);
+    }
+    return kept.length ? kept.join("\n") : String(text);
+  }
+  window.__SB.stripOptions = stripOptions;
+
   window.__SB.extractQuestionText = extractQuestionText;
 
   // ===================== 覆盖 tesseractRecognize：走原生离线 OCR + 自动提炼 =====================

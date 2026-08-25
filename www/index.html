@@ -826,19 +826,21 @@
     <section class="view" id="v-search">
       <div class="card">
         <h2><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg>试题搜索</h2>
-        <!-- 顶部大搜索框 -->
+        <!-- 顶部搜索框：v2.6 改成 textarea，可显示完整题干、方便手动删除多余选项 -->
         <div style="position:relative;margin-bottom:12px;">
-          <input id="searchInput" placeholder="输入关键字（比如：习近平、安全生产、装备精良…）"
-            style="padding:14px 90px 14px 44px;font-size:15px;width:100%;border:1px solid var(--line);border-radius:14px;background:var(--card);">
+          <textarea id="searchInput" rows="1" placeholder="输入关键字（比如：习近平、安全生产、装备精良…）"
+            style="padding:14px 90px 14px 44px;font-size:15px;width:100%;min-height:46px;max-height:200px;line-height:1.5;
+                   border:1px solid var(--line);border-radius:14px;background:var(--card);resize:vertical;
+                   overflow:auto;font-family:inherit;"></textarea>
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-            style="position:absolute;left:14px;top:50%;transform:translateY(-50%);pointer-events:none"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg>
+            style="position:absolute;left:14px;top:14px;pointer-events:none"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg>
           <!-- 一键清空按钮：只在有内容时显示 -->
           <button id="searchClear" type="button" aria-label="清空" title="清空 (Esc)"
-            style="display:none;position:absolute;right:74px;top:50%;transform:translateY(-50%);
+            style="display:none;position:absolute;right:74px;top:10px;
                    width:28px;height:28px;border-radius:50%;border:none;background:transparent;
                    color:#94a3b8;cursor:pointer;align-items:center;justify-content:center;font-size:20px;line-height:1;
                    padding:0;">×</button>
-          <button id="searchBtn" class="btn pri" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);padding:7px 16px;border-radius:10px;">搜索</button>
+          <button id="searchBtn" class="btn pri" style="position:absolute;right:6px;top:8px;padding:7px 16px;border-radius:10px;">搜索</button>
         </div>
         <!-- chip 筛选 -->
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center;">
@@ -1368,7 +1370,7 @@ function qCard(i,mini){
   return '<div class="qcard"><div class="qh"><span class="idx">Q</span><span>'+esc(cleanQ(i))+overdue+'</span></div>'
     +cat+opts+'<div class="ans"><span class="lab">答案</span>'+esc(i.a)+'</div>'+note+ops+'</div>';
 }
-function locate(id){const it=DATA.items.find(x=>x.id===id);if(!it)return;go("search");$("#searchInput").value=it.q.slice(0,12);doSearch();}
+function locate(id){const it=DATA.items.find(x=>x.id===id);if(!it)return;go("search");$("#searchInput").value=it.q.slice(0,12);if(typeof autoResizeSearch==="function")autoResizeSearch();doSearch();}
 function clearOverdue(id){const it=DATA.items.find(x=>x.id===id);if(it){delete it.overdue;save();renderHome();toast("已标记为处理");}}
 
 /* ============ 搜索 ============ */
@@ -1592,11 +1594,21 @@ function fillSearchFilters(){
 }
 function fillCatFilter(){fillSearchFilters();}
 $("#searchBtn").addEventListener("click",doSearch);
-$("#searchInput").addEventListener("keydown",e=>{if(e.key==="Enter")doSearch();else if(e.key==="Escape"){$("#searchInput").value="";$("#searchClear").style.display="none";$("#searchMeta").textContent="";$("#searchResults").innerHTML="";}});
+$("#searchInput").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey&&!e.isComposing){e.preventDefault();doSearch();}else if(e.key==="Escape"){$("#searchInput").value="";$("#searchClear").style.display="none";$("#searchMeta").textContent="";$("#searchResults").innerHTML="";autoResizeSearch();}});
 $("#searchInput").addEventListener("input",()=>{
   var v=$("#searchInput").value;
   $("#searchClear").style.display=v?"flex":"none";
+  autoResizeSearch();
 });
+function autoResizeSearch(){
+  var inp=$("#searchInput");if(!inp)return;
+  // textarea 自适应高度
+  inp.style.height="auto";
+  var h=Math.min(Math.max(inp.scrollHeight,46),200);
+  inp.style.height=h+"px";
+  // × 清空按钮的位置要随高度动；保持在 textarea 顶部，padding-top 一致
+  var clr=$("#searchClear");if(clr){clr.style.top="10px";}
+}
 $("#searchClear").addEventListener("click",()=>{
   var inp=$("#searchInput");if(!inp)return;
   inp.value="";inp.focus();
@@ -2858,7 +2870,13 @@ function renderOcrUI(area,b64,text,file,origW,origH){
     +'box-shadow:0 4px 10px rgba(0,0,0,.15);font-weight:600;">×</button></div>'
     +(sizeInfo?'<div class="muted" style="font-size:13px;margin:-6px 0 8px;">'+sizeInfo+'</div>':'')
     + nativeToggle
-    +'<div class="field" style="margin-top:10px"><label>识别出的文字（自动 OCR 或手动粘贴）</label><textarea id="ocrText" placeholder="在此粘贴/编辑图片中的题目文字…">'+esc(taText)+'</textarea></div>'
+    +'<div class="field" style="margin-top:10px"><label>识别出的文字（自动 OCR 或手动粘贴）</label><textarea id="ocrText" placeholder="在此粘贴/编辑图片中的题目文字…">'+esc(taText)+'</textarea>'
+    // v2.6：剥离选项按钮 + 自动剥离开关
+    +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px;font-size:13px;color:var(--sub)">'
+    +'<button type="button" class="btn" id="ocrStripOpt" title="把首个 ABCD 选项之后的内容去掉，只留题干" style="padding:6px 12px;font-size:13px;">剥选项</button>'
+    +'<label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;"><input type="checkbox" id="ocrAutoStrip" checked> 搜题前自动剥离选项</label>'
+    +'<span class="muted" style="margin-left:auto" id="ocrStripHint"></span>'
+    +'</div>'
     +'<div class="row"><button class="btn pri" id="ocrSearch">识别并搜题</button>'
     +(hasOCR?'<button class="btn" id="ocrRetry">重新识别</button>':'<button class="btn" id="ocrCfg">配置 OCR（设置里选引擎）</button>')
     +'<button class="btn" id="ocrSave">存为待识别图片</button></div>'
@@ -2909,9 +2927,40 @@ function renderOcrUI(area,b64,text,file,origW,origH){
     };
   }
   $("#ocrSearch").onclick=()=>{
-    const t=$("#ocrText").value.trim();if(!t){toast("请先填入识别文字");return;}
-    go("search");$("#searchInput").value=t;$("#catFilter").value="";$("#bankFilter").value="";doSearch();
+    let t=$("#ocrText").value.trim();if(!t){toast("请先填入识别文字");return;}
+    // v2.6：搜题前可选自动剥离选项
+    if($("#ocrAutoStrip") && $("#ocrAutoStrip").checked && window.__SB && typeof window.__SB.stripOptions==="function"){
+      const origLen=t.length;
+      const stripped=window.__SB.stripOptions(t);
+      if(stripped && stripped.length<origLen){t=stripped;$("#ocrText").value=t;toast("已剥离选项，只搜题干（节省"+ (origLen-t.length) +"字）");}
+    }
+    go("search");$("#searchInput").value=t;$("#catFilter").value="";$("#bankFilter").value="";if(typeof autoResizeSearch==="function")autoResizeSearch();doSearch();
   };
+  // v2.6：「剥选项」按钮 —— 直接把 OCR 文本框里的第一个 ABCD 选项之后的去掉
+  var ocrStripBtn=area.querySelector("#ocrStripOpt");
+  var ocrAutoStrip=area.querySelector("#ocrAutoStrip");
+  var ocrStripHint=area.querySelector("#ocrStripHint");
+  function updateStripHint(){
+    if(!ocrStripHint)return;
+    var ta=area.querySelector("#ocrText");
+    var txt=ta?(ta.value||""):"";
+    var has=/[A-Da-d][\.、:：]\s*[^\s]/.test(txt);
+    ocrStripHint.textContent=has?("检测到 ABCD 选项 (共 "+(txt.match(/[A-Da-d][\.、:：]/g)||[]).length+" 处)"):"";
+  }
+  if(ocrStripBtn){
+    ocrStripBtn.onclick=()=>{
+      var ta=area.querySelector("#ocrText");if(!ta)return;
+      var t=ta.value||"";
+      if(window.__SB && typeof window.__SB.stripOptions==="function"){
+        var s=window.__SB.stripOptions(t);
+        if(s!==t){ta.value=s;toast("已剥离 ABCD 选项");updateStripHint();}
+        else{toast("未识别到 ABCD 选项，无需剥离");}
+      }
+    };
+  }
+  if(ocrAutoStrip){ocrAutoStrip.onchange=()=>{try{localStorage.setItem("__sb_ocr_auto_strip",ocrAutoStrip.checked?"1":"0");}catch(e){}};try{ocrAutoStrip.checked=localStorage.getItem("__sb_ocr_auto_strip")!=="0";}catch(e){}}
+  var ocrTa=area.querySelector("#ocrText");
+  if(ocrTa){ocrTa.addEventListener("input",updateStripHint);setTimeout(updateStripHint,30);}
   $("#ocrSave").onclick=()=>{
     const t=$("#ocrText").value.trim();if(!t){toast("请先填入识别文字");return;}
     DATA.items.push({id:uid(),q:t.slice(0,60),a:"（待补充：根据图片识别文字整理答案）",cat:"",note:t,img:b64,createdAt:Date.now(),src:"图片",matched:false});
@@ -4740,6 +4789,7 @@ $("#ppBank").addEventListener("change",()=>{renderPPTypeRows();ppState=null;rend
       if (typeof go !== "function" || typeof doSearch !== "function") return;
       go("search");
       var inp = $("#searchInput"); if (inp) inp.value = txt;
+      if (typeof autoResizeSearch === "function") autoResizeSearch();
       doSearch();
       showAnsForCurrentResults(txt, "剪贴板");
     } catch (e) {
@@ -4802,6 +4852,7 @@ $("#ppBank").addEventListener("change",()=>{renderPPTypeRows();ppState=null;rend
     showLoading(false);
     if (typeof go === "function") go("search");
     var inp = $("#searchInput"); if (inp) inp.value = stem;
+    if (typeof autoResizeSearch === "function") autoResizeSearch();
     var bf = $("#bankFilter"); if (bf) bf.value = "";
     var cf = $("#catFilter"); if (cf) cf.value = "";
     if (typeof doSearch === "function") doSearch();
@@ -4868,6 +4919,7 @@ $("#ppBank").addEventListener("change",()=>{renderPPTypeRows();ppState=null;rend
     if (!query) return;
     if (typeof go === "function") go("search");
     var inp = $("#searchInput"); if (inp) inp.value = query;
+    if (typeof autoResizeSearch === "function") autoResizeSearch();
     if (typeof doSearch === "function") doSearch();
     showAnsForCurrentResults(query, srcLabel);
   };

@@ -3,6 +3,17 @@
 > 用户反馈的四个使用问题：① 关 App 数据丢失；② OCR 识别带噪声/不相关；③ 图标是占位纯蓝；④ 双指能拉大。
 > 全部已修，代码本地 commit `29ca9f5`；推到 GitHub 因 PAT 失效未果，用户在 Mac 或本地 git push 即可。
 
+## 9. v2.6 构建交付（2026-08-25 21:30+）—— 搜索栏 textarea 化 + OCR 剥离选项（本次）
+
+- 用户反馈两个剩余问题：
+  - 图片识别页面题干带 ABCD 选项，搜题匹配不到
+  - 文字搜索栏 input 单行，超长题干被截断看不到（"最"字后看不见），无法手动删除
+- 处理：① #searchInput 改 textarea，多行自适应高度（46–200px），Enter 搜索 / Shift+Enter 换行；×清空和搜索按钮贴右侧
+- ② OCR 面板新增「剥选项」按钮 + 「搜题前自动剥离选项」开关（默认开，记住用户偏好到 localStorage）
+- ③ app-bridge.js 加 `__SB.stripOptions(text)`：按行扫描定位到第一个 "A./A、/A:" 选项处截断
+- 「识别并搜题」按下时若开启剥离开关→ 先 stripOptions→再送入搜索栏，搜索栏因是 textarea 自动撑高，题干完整可见方便用户再次手工清理
+- 备注：v2.5 已经实现了 OCR 图片删除按钮（ocrDelImg）、搜索×清空按钮、滑动动画、紧凑化，本版本确认保留并扩展
+
 ## 8. v2.4 构建交付（2026-08-25 20:05）—— 已推送 + IPA 已出
 
 - commit `cfaa4b0` 推送到 GitHub（`15cb565..cfaa4b0 main -> main`），Actions run `32844942595` **completed success**
