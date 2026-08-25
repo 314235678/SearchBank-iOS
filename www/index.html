@@ -3277,8 +3277,8 @@ document.getElementById("btnSaveNow").addEventListener("click",()=>{saveNow();to
 document.getElementById("setEngine").addEventListener("change",e=>ocrUrlBoxToggle(e.target.value));
 document.getElementById("btnOcrFree").addEventListener("click",()=>{
   $("#setEngine").value="ocrspace";ocrUrlBoxToggle("ocrspace");
-  $("#setOcr").value="https://api.ocr.space/parse/image?apikey=K89850164588957";
-  toast("已填入你的 OCR.space key。点底部「保存」生效；若仍识别不了（OCR.space 国内访问受限），请在引擎里改选「本地识别」");
+  $("#setOcr").value="https://api.ocr.space/parse/image?apikey=YOUR_KEY&language=chs";
+  toast("已填入占位 URL。请把 YOUR_KEY 替换为你自己的 OCR.space 密钥（去 ocr.space/ocrapi 免费注册，5 分钟拿到）。点底部「保存」生效；OCR.space 国内访问可能受限，建议保留「本地识别」");
 });
 document.getElementById("btnOcrClear").addEventListener("click",()=>{$("#setOcr").value="";toast("已清空在线接口（仍可改用本地识别）");});
 // v2.8 OCR 高级选项读写
