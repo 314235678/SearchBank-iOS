@@ -301,6 +301,9 @@ extension ViewController: WKNavigationDelegate, WKUIDelegate {
 
     /// 让 `<input type="file">` 在 WKWebView 中也能弹出 UIDocumentPicker。
     /// FAB 在普通浏览器（无 native bridge 时的降级路径）依赖此回调。
+    /// 注意：Xcode 26 SDK 中 WKOpenPanelParameters 标注为 iOS 18.4+；
+    /// 低版本系统走 __SB.pickFiles（原生 FAB），不依赖本方法。
+    @available(iOS 18.4, *)
     func webView(_ webView: WKWebView,
                  runOpenPanelWith parameters: WKOpenPanelParameters,
                  initiatedByFrame frame: WKFrameInfo,
