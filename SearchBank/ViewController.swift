@@ -21,18 +21,8 @@ class ViewController: UIViewController,
     private var openPanelResolve: (([URL]?) -> Void)?
     private var photoPickerResolve: ((String?) -> Void)?
 
-    private var webView: WKWebView!
-    private var documentPickerResolve: (([[String: Any]]) -> Void)?
-    private var cameraResolve: ((String?) -> Void)?
-    private var openPanelResolve: (([URL]?) -> Void)?
-
-    override func viewDidLoad() {
-        super.viewDidLoad()
-        setupWebView()
-        // 启动时确保 Documents 下的 data.json 在 Files App 可见
-        LocalStore.ensureFinderVisible()
-        loadApp()
-    }
+    // 收到 URL scheme 唤醒（NotificationCenter 由 AppDelegate.post 触发）
+    private var pendingOpenURL: String?
 
     // MARK: - WebView 配置与加载
 
@@ -112,7 +102,7 @@ class ViewController: UIViewController,
     }
 
     // 收到 URL scheme 唤醒（NotificationCenter 由 AppDelegate.post 触发）
-    private var pendingOpenURL: String?
+    // (pendingOpenURL 属性已声明在 class 顶部)
 
     override func viewDidLoad() {
         super.viewDidLoad()
