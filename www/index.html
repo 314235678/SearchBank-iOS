@@ -2929,12 +2929,20 @@ function renderOcrUI(area,b64,text,file,origW,origH){
     if (!(window.__SB && window.__SB.native && window.__SB.__lastOCR)) return "";
     const last = window.__SB.__lastOCR;
     if (!last || !last.stem) return "";
-    const useStem = last.mode === "stem";
+    // v2.11：从 localStorage 读取用户上次选择的模式（默认 "raw" 识别全文）
+    let savedMode = "raw";
+    try { savedMode = localStorage.getItem("sb_ocr_default_mode") || "raw"; } catch(e) {}
+    if (last && (last.mode === "stem" || last.mode === "raw")) {
+      // 用户在面板刚切换过 → 同步给 localStorage
+      try { localStorage.setItem("sb_ocr_default_mode", last.mode); } catch(e) {}
+      savedMode = last.mode;
+    }
+    const useStem = savedMode === "stem";
     return '<div id="ocrNativeToggle" style="display:flex;align-items:center;gap:8px;margin:8px 0 6px;font-size:13px;color:var(--sub);flex-wrap:wrap;">' +
       '<b style="color:var(--ink)">显示：</b>' +
       '<button type="button" class="btn '+(useStem?'pri':'')+'" data-mode="stem" style="padding:6px 10px;font-size:13px;">自动提炼题干</button>' +
       '<button type="button" class="btn '+(!useStem?'pri':'')+'" data-mode="raw" style="padding:6px 10px;font-size:13px;">识别全文（保留页面噪声）</button>' +
-      '<span class="muted">默认用提炼版搜题</span>' +
+      '<span class="muted">v2.11 默认 <b style="color:var(--pri-d)">识别全文</b>（提炼常丢题干）</span>' +
       '</div>';
   })();
   const taText = (window.__SB && window.__SB.native && window.__SB.__lastOCR && window.__SB.__lastOCR.stem)
@@ -2976,7 +2984,7 @@ function renderOcrUI(area,b64,text,file,origW,origH){
       }
     });
   }
-  // 原生 App：切换"提炼 / 全文"
+  // 原生 App：切换"提炼 / 全文"，记忆到 localStorage
   if (window.__SB && window.__SB.native && window.__SB.__lastOCR && window.__SB.__lastOCR.stem) {
     const wrap = area.querySelector("#ocrNativeToggle");
     if (wrap) {
@@ -2986,6 +2994,8 @@ function renderOcrUI(area,b64,text,file,origW,origH){
         const last = window.__SB.__lastOCR;
         const mode = btn.getAttribute("data-mode");
         last.mode = mode;
+        // v2.11：记忆到 localStorage，下次 runNativeBase64Ocr 也会用这个模式
+        try { localStorage.setItem("sb_ocr_default_mode", mode); } catch(e) {}
         const ta = $("#ocrText");
         if (ta) ta.value = mode === "stem" ? (last.stem || last.raw) : last.raw;
         wrap.querySelectorAll("button[data-mode]").forEach(function (b) {
@@ -4902,6 +4912,8 @@ $("#ppBank").addEventListener("change",()=>{renderPPTypeRows();ppState=null;rend
   }
 
   // 走 native bridge：base64 + mime → ocr → 搜题
+  // v2.11：根据用户选择的模式决定送 stem 还是 cleaned 全文给搜索
+  // 默认 raw（识别全文），用户也可在 OCR 面板切换为 stem（自动提炼）并被记住
   function runNativeBase64Ocr(dataUrl, src) {
     showLoading(true);
     try {
@@ -4916,8 +4928,37 @@ $("#ppBank").addEventListener("change",()=>{renderPPTypeRows();ppState=null;rend
         if (window.__SB && typeof window.__SB.fixCommonOCRErrors === "function") {
           try { text = window.__SB.fixCommonOCRErrors(text); } catch (e) {}
         }
-        var ex = window.__SB.extractQuestionText ? window.__SB.extractQuestionText(text) : { stem: text };
-        runSearchWithStem(ex.stem || text, src || "图片识别");
+        var ex = window.__SB.extractQuestionText ? window.__SB.extractQuestionText(text) : { stem: text, cleaned: text };
+        // v2.11：选择模式（localStorage 记忆 + 同步 __lastOCR.mode 用于面板显示）
+        var savedMode = null;
+        try { savedMode = localStorage.getItem("sb_ocr_default_mode"); } catch(e) {}
+        if (window.__SB && window.__SB.__lastOCR && window.__SB.__lastOCR.mode) {
+          // 用户在 OCR 面板点了模式，临时优先级最高（同时记忆到 localStorage）
+          try { localStorage.setItem("sb_ocr_default_mode", window.__SB.__lastOCR.mode); } catch(e) {}
+        }
+        var mode = (window.__SB && window.__SB.__lastOCR && window.__SB.__lastOCR.mode) || savedMode || "raw";
+        // v2.11 关键：提炼失败兜底（用户 v2.10 痛点——提炼把题干丢了，stem 只剩选项残片）
+        // 失败判定更严：
+        //   - stem 太短 (< 8 字)
+        //   - stem 长度 < cleaned 的 60%（说明提炼丢了大量内容，例如题干）
+        //   - stem 不含任何题干标点（，。？！（））——大概率只剩选项字符
+        var cleanedLen = (ex.cleaned || "").replace(/\s/g, "").length;
+        var stemLen = (ex.stem || "").replace(/\s/g, "").length;
+        var stemHasStemPunct = /[，。？！（）：]/.test(ex.stem || "");
+        var stemOK = stemLen >= 8
+                  && stemLen >= Math.max(10, cleanedLen * 0.6)
+                  && (stemHasStemPunct || stemLen >= cleanedLen * 0.9);
+        var queryText;
+        if (mode === "raw" || !stemOK) {
+          // 全文模式 或 提炼失败 → 用 cleaned（去噪行后）送搜索
+          queryText = ex.cleaned || ex.raw || text;
+          if (mode === "stem" && !stemOK) {
+            try { toast("自动提炼失败，已用全文搜索"); } catch(e) {}
+          }
+        } else {
+          queryText = ex.stem;
+        }
+        runSearchWithStem(queryText, src || "图片识别");
       }).catch(function (e) {
         showLoading(false);
         toast("识别失败：" + (e && e.message ? e.message : e));
