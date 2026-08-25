@@ -1012,6 +1012,29 @@
       <button class="btn" id="btnOcrFree" type="button">用我的 OCR.space key</button>
       <button class="btn ghost" id="btnOcrClear" type="button">清除在线接口</button>
     </div>
+    <!-- v2.8 OCR 高级选项（红色背景白化 + 错别字纠正） -->
+    <div class="field" style="margin-top:8px"><b style="color:var(--pri-d)">📷 OCR 高级选项（iOS 原生 Vision）</b></div>
+    <div style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--sub);margin-bottom:8px;">
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+        <input type="checkbox" id="optWhitenRed" checked> 红色背景自动白化（截图题库"考试复习"红色背景变白底，更准）
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+        <input type="checkbox" id="optTypoFix" checked> 错别字自动纠正（炕→烷、设→没、的→地等 100+ 常见 OCR 错字）
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+        <input type="checkbox" id="optSingleCol"> 单栏-无换行（让红色界面题干作为长字符串送搜题，借鉴 Umi-OCR 排版方案）
+      </label>
+      <div style="display:flex;align-items:center;gap:6px;margin-top:4px">
+        <span>限制图像边长</span>
+        <select id="optMaxEdge" style="padding:4px 8px;border:1px solid var(--line);border-radius:6px;background:var(--soft);font-size:13px">
+          <option value="0">不缩放（原图）</option>
+          <option value="1200">1200px（小图，省时间）</option>
+          <option value="1600" selected>1600px（推荐）</option>
+          <option value="2000">2000px（高质量）</option>
+          <option value="960">960px（Umi-OCR 默认）</option>
+        </select>
+      </div>
+    </div>
     <div class="foot"><button class="btn pri" id="setSave">保存</button></div>
   </div>
 </div>
@@ -1388,7 +1411,9 @@ function buildNormCache(items){
     let opt="";
     const o=it.opts;
     if(o&&o.length){for(let k=0;k<o.length;k++)opt+=norm(o[k].text||"")+" ";}
-    c.set(it.id,{Q:norm(it.q||"")+" "+opt,A:norm(it.a||""),N:norm(it.note||""),C:norm(it.cat||"")});
+    // v2.8 题干/选项分离缓存：题干 Q（权重高），选项 OPT（权重低）
+    // 让"题干命中"的题排在"选项命中"前面，避免题库里含相同选项的题串到前面
+    c.set(it.id,{Q:norm(it.q||""),OPT:opt,A:norm(it.a||""),N:norm(it.note||""),C:norm(it.cat||"")});
   }
   return c;
 }
@@ -1437,23 +1462,31 @@ function charHit(hay,need){
   for(let i=0;i<need.length;i++){if(hay.indexOf(need[i])>=0)hit++;}
   return hit>=Math.ceil(need.length*0.6);
 }
-/* 评分（输入为归一化缓存）：题干精确命中即满分，只有未命中才跑一次 fuzzy；
+/* 评分（输入为归一化缓存）：v2.8 题干权重 2x，选项权重 0.5x（题干命中 > 选项命中）。
    答案/解析/分类仅做精确包含，不再各自跑滑窗 —— 从每题 4 次 fuzzy 降到 0~1 次 */
 function scoreItem(c,qn){
   if(!qn)return 0;
-  const Q=c.Q,A=c.A,N=c.N,C=c.C;
+  const Q=c.Q,OPT=c.OPT,A=c.A,N=c.N,C=c.C;
+  // v2.8：把题干和选项分开评分（题干 2x，选项 0.5x）
+  const STEM_W=2,OPT_W=0.5;
   if(qn.length<3){
     let s=0;
-    if(Q.includes(qn))s+=10;
-    else if(fuzzyScore(qn,Q)>=0.5)s+=5;
+    if(Q.includes(qn))s+=10*STEM_W;
+    else if(fuzzyScore(qn,Q)>=0.5)s+=5*STEM_W;
+    if(OPT && OPT.includes(qn))s+=2*OPT_W;
     if(A.includes(qn))s+=2;
     if(N.includes(qn))s+=1;
     if(C.includes(qn))s+=1;
     return s;
   }
   let s=0;
-  if(Q.includes(qn))s+=10;
-  else if(charHit(Q,qn)){const sq=fuzzyScore(qn,Q);if(sq>=0.5)s+=10*sq;}
+  // 题干命中（权重高）
+  if(Q.includes(qn))s+=10*STEM_W;
+  else if(charHit(Q,qn)){const sq=fuzzyScore(qn,Q);if(sq>=0.5)s+=10*STEM_W*sq;}
+  // 选项命中（权重低）
+  if(OPT && OPT.includes(qn))s+=2*OPT_W;
+  else if(OPT && charHit(OPT,qn)){const sq=fuzzyScore(qn,OPT);if(sq>=0.5)s+=2*OPT_W*sq;}
+  // 答案/解析/分类精确包含
   if(A.includes(qn))s+=2;
   if(N.includes(qn))s+=1;
   if(C.includes(qn))s+=1;
@@ -3047,6 +3080,28 @@ document.getElementById("btnOcrFree").addEventListener("click",()=>{
   toast("已填入你的 OCR.space key。点底部「保存」生效；若仍识别不了（OCR.space 国内访问受限），请在引擎里改选「本地识别」");
 });
 document.getElementById("btnOcrClear").addEventListener("click",()=>{$("#setOcr").value="";toast("已清空在线接口（仍可改用本地识别）");});
+// v2.8 OCR 高级选项读写
+function bindOcrAdvOptions(){
+  if(!$("#optWhitenRed"))return;
+  var d=function(k){return localStorage.getItem("sb_"+k);};
+  $("#optWhitenRed").checked=d("ocr_whiten_red")!=="0";
+  $("#optTypoFix").checked=d("ocr_typo_fix")!=="0";
+  $("#optSingleCol").checked=d("ocr_single_col")==="1";
+  $("#optMaxEdge").value=d("ocr_max_edge")||"1600";
+  $("#optWhitenRed").onchange=function(){localStorage.setItem("sb_ocr_whiten_red",this.checked?"1":"0");syncOcrSettings();};
+  $("#optTypoFix").onchange=function(){localStorage.setItem("sb_ocr_typo_fix",this.checked?"1":"0");};
+  $("#optSingleCol").onchange=function(){localStorage.setItem("sb_ocr_single_col",this.checked?"1":"0");};
+  $("#optMaxEdge").onchange=function(){localStorage.setItem("sb_ocr_max_edge",this.value);syncOcrSettings();};
+}
+function syncOcrSettings(){
+  if(!window.__SB||!window.__SB.setSetting)return;
+  var whiten=$("#optWhitenRed")?$("#optWhitenRed").checked:true;
+  var maxEdge=parseInt(($("#optMaxEdge")?$("#optMaxEdge").value:"1600"),10)||0;
+  window.__SB.setSetting("sb_ocr_whiten_red",whiten);
+  window.__SB.setSetting("sb_ocr_max_edge",maxEdge);
+}
+bindOcrAdvOptions();
+syncOcrSettings();
 $("#setSave").addEventListener("click",()=>{
   const st=settings();
   st.ocrEngine=$("#setEngine").value;
@@ -4810,6 +4865,10 @@ $("#ppBank").addEventListener("change",()=>{renderPPTypeRows();ppState=null;rend
         showLoading(false);
         text = (text || "").trim();
         if (!text) { toast("识别结果为空，请重试"); return; }
+        // v2.8 错别字纠正（在 extractQuestionText 之前对原文纠正一次）
+        if (window.__SB && typeof window.__SB.fixCommonOCRErrors === "function") {
+          try { text = window.__SB.fixCommonOCRErrors(text); } catch (e) {}
+        }
         var ex = window.__SB.extractQuestionText ? window.__SB.extractQuestionText(text) : { stem: text };
         runSearchWithStem(ex.stem || text, src || "图片识别");
       }).catch(function (e) {

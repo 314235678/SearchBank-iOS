@@ -178,6 +178,10 @@ class ViewController: UIViewController,
         case "processURL":
             // URL scheme 唤醒参数处理：JS 端只需要 acknowledge
             handleProcessURL(id: id, payload: payload)
+        case "setSetting":
+            handleSetSetting(id: id, payload: payload)
+        case "getSetting":
+            handleGetSetting(id: id, payload: payload)
         default:
             respond(id: id, result: ["error": "unknown type: \(type)"])
         }
@@ -228,8 +232,17 @@ class ViewController: UIViewController,
         }
         // 【v2.7】让 Swift 端做裁切：去掉顶部/底部各 4%（仅够去掉状态栏+灵动岛+底部小白条），
         //   之前 8% 在 iPhone 截屏上会把"题号"和题干首行裁掉，导致 OCR 只能识别中下部的选项。
-        //   之前 8% 在 1179×2556 截屏上 = 顶 204px / 底 204px，超出状态栏范围，把考试宝题号+题干干掉了。
-        OfflineOCR.recognize(base64: b64, cropHeaderPct: 0.04, cropFooterPct: 0.04) { text in
+        // 【v2.8】红色背景白化 + 限制图像边长（借鉴 Umi-OCR 的"限制图像边长 960"），
+        //   从 UserDefaults 读用户偏好（JS 端通过 __SB.setSettings 写入）。
+        let defaults = UserDefaults.standard
+        let whiten = defaults.object(forKey: "sb_ocr_whiten_red") as? Bool ?? true
+        let maxEdge = defaults.object(forKey: "sb_ocr_max_edge") as? Int ?? 1600
+        // v2.7 注释：4% 顶/底 = 1179×2556 截屏上 ~100px，刚好去掉状态栏+灵动岛
+        OfflineOCR.recognize(base64: b64,
+                             cropHeaderPct: 0.04,
+                             cropFooterPct: 0.04,
+                             whitenRedBg: whiten,
+                             maxEdge: maxEdge) { text in
             self.respond(id: id, result: ["text": text ?? ""])
         }
     }
@@ -395,6 +408,35 @@ class ViewController: UIViewController,
     /// 真正的 URL 解析在 AppDelegate 的 openURL 中完成，并通过 evaluateJavaScript 注入。
     private func handleProcessURL(id: String, payload: [String: Any]) {
         respond(id: id, result: ["ok": true])
+    }
+
+    // MARK: - 设置读写（v2.8 OCR 行为控制）
+
+    /// JS 端通过 __SB.setSetting(key, value) 写入 UserDefaults
+    /// 供 setEngine/ocrCfg 等其他设置共存（key 全部 sb_ 前缀避免冲突）
+    private func handleSetSetting(id: String, payload: [String: Any]) {
+        guard let key = payload["key"] as? String, !key.isEmpty else {
+            respond(id: id, result: ["error": "missing key"])
+            return
+        }
+        let value = payload["value"]
+        let defaults = UserDefaults.standard
+        if let b = value as? Bool { defaults.set(b, forKey: key) }
+        else if let i = value as? Int { defaults.set(i, forKey: key) }
+        else if let d = value as? Double { defaults.set(d, forKey: key) }
+        else if let s = value as? String { defaults.set(s, forKey: key) }
+        else if value is NSNull { defaults.removeObject(forKey: key) }
+        else { respond(id: id, result: ["error": "unsupported value type"]); return }
+        respond(id: id, result: ["ok": true])
+    }
+
+    private func handleGetSetting(id: String, payload: [String: Any]) {
+        guard let key = payload["key"] as? String, !key.isEmpty else {
+            respond(id: id, result: ["error": "missing key"])
+            return
+        }
+        let value = UserDefaults.standard.object(forKey: key)
+        respond(id: id, result: ["value": value as Any])
     }
 
     // MARK: - 拍照（FAB 相机按钮使用）

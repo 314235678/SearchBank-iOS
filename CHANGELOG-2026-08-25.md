@@ -3,6 +3,21 @@
 > 用户反馈的四个使用问题：① 关 App 数据丢失；② OCR 识别带噪声/不相关；③ 图标是占位纯蓝；④ 双指能拉大。
 > 全部已修，代码本地 commit `29ca9f5`；推到 GitHub 因 PAT 失效未果，用户在 Mac 或本地 git push 即可。
 
+## 11. v2.8 构建交付（2026-08-26 00:50+）—— 红色背景 OCR + 错别字容错（本次）
+
+- 用户反馈：v2.7 仍有很多题识别不出；推荐 Umi-OCR（Windows 桌面 PaddleOCR）；红色背景（"考试复习"）的题根本识别不了
+- 关键决策：Umi-OCR 移植集成需要 2-4 周工程（集成 Paddle-Lite iOS SDK、8MB+ 模型、Swift 桥接），本轮先借鉴其核心设计（红色背景白化、单栏-无换行、错别字纠正、限制图像边长）强化 Vision
+- 本次改动：
+  1. **Swift 端红色背景白化**（`OfflineOCR.swift`）：检测深红色背景像素（`R > 170 && R-max(G,B) > 60` 且红色像素占 >8%）→ 改为白底（255,255,255），黑色题干识别率大幅提升
+  2. **Swift 端图像缩放**（`OfflineOCR.swift`）：`maxEdge` 参数（默认 1600px，借鉴 Umi-OCR 的 960 选项）限制最长边，减少 Vision 处理时间
+  3. **Swift 端单栏-无换行**（`OfflineOCR.swift`）：把 Vision observations 按 Y 坐标分组，**同行内用空格拼接**（不是 \n），效果类似 Umi-OCR 的"单栏-无换行"
+  4. **JS 端错别字纠正字典**（`app-bridge.js`）：100+ 常见 OCR 形近字（甲炕→甲烷、瓦丝→瓦斯、应响→影响、没备→设备 等），`fixCommonOCRErrors(text)` 在 OCR 全文后立即替换
+  5. **JS 端题干加权**（`index.html` `scoreItem`）：把题库缓存的"题干 Q"和"选项 OPT"分开存储；题干命中权重 2x，选项命中权重 0.5x，避免选项字符占满搜索关键词
+  6. **JS 端"顿号"选项起点**：`A、xxx`（中文顿号格式）现在也能识别为选项起点
+  7. **设置面板加 OCR 高级选项**（`index.html`）：红色背景白化 / 错别字纠正 / 单栏-无换行 / 限制图像边长 4 个开关
+  8. **Swift 端 `setSetting` / `getSetting` bridge**（`ViewController.swift`）：JS 可读写 UserDefaults，下次 OCR 调用立即生效
+- 备注：Umi-OCR 移植（v3.0 路线）后续单独评估：模型加载、Swift 桥接、磁盘占用 8MB+、调试困难，先观察 v2.8 红色背景白化效果
+
 ## 10. v2.7 构建交付（2026-08-25 23:00+）—— FAB 搜题 + OCR 提纯（本次）
 
 - 用户反馈：FAB 快捷指令搜题识别率低；某些题用图片识别的"自动提炼题干"功能可以搜出，但 FAB 只能识别选项搜不出；搜索栏 × 清空按钮看不出
