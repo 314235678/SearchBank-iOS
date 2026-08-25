@@ -1544,7 +1544,25 @@ function scoreItem(c,qn){
 }
   // v2.9 分块搜索：长查询（OCR 全文/长题干）切成 4-6 字滑窗块，每块单独评分取最高，
   //   一个错字只影响相邻块，不再因 1-2 个错字整段 miss
+  // 【v2.15】给每个块算"信息分"：停用词（"的了在是不有和法规定"等高频字）占比越低分越高；
+  //   通用词块（"《》"、单字等）打分极低，让罕见词块（"职业病""应急救援"）占主导
   // 返回块数组；短查询返回 [q]
+  const STOP_CHARS = "的了在是不有和与等为也之但而或又所这那这本个些于到从以及对以可不可没把被是";  // 50+ 高频停用字
+  function blockInfo(b) {
+    var valid = 0, stop = 0;
+    for (var i = 0; i < b.length; i++) {
+      var c = b.charAt(i);
+      if (/[\u4e00-\u9fa5]/.test(c)) {
+        if (STOP_CHARS.indexOf(c) >= 0) stop++;
+        else valid++;
+      } else if (/[A-Za-z0-9]/.test(c)) {
+        valid++;
+      }
+    }
+    if (valid < 2) return 0;       // 有效字 < 2 → 纯符号/单字块，丢弃
+    var stopRatio = stop / Math.max(1, stop + valid);
+    return valid * (1 - stopRatio * 0.7);  // 停用词占比越高分数越低
+  }
   function chunkQuery(q){
     if(!q)return [];
     if(q.length<=10)return [q];
@@ -1570,7 +1588,9 @@ function scoreItem(c,qn){
     for(const b of blocks){if(!seen.has(b)){seen.add(b);out.push(b);}}
     // 过滤明显噪声块：纯题型标签（单选/多选/判断题等）开头的块
     const noiseStart=/^(单选|多选|判断|填空|简答|不定项|材料|案例分析|背题|收藏|分享|答题卡|交卷|题型)/;
-    const filtered=out.filter(b=>!noiseStart.test(b));
+    let filtered=out.filter(b=>!noiseStart.test(b));
+    // 【v2.15】过滤信息分=0 的纯停用词块（让"职业病""应急救援"等罕见词块占主导）
+    filtered = filtered.filter(b => blockInfo(b) > 0);
     return (filtered.length?filtered:out).slice(0,28);
   }
 let _searchToken=0; // 用于取消过期搜索请求
@@ -1586,8 +1606,7 @@ function doSearch(){
   const filters=[bf?'题库筛选':'',tf?'题型筛选':'',cf?'分类筛选':''].filter(Boolean);
   // v2.9 分块：长查询拆成多个 4-6 字块
   const blocks=chunkQuery(q);
-  const primaryQ=blocks[0]||q;
-  let pool=DATA.items.slice();
+  const primaryQ=blocks[0]||q;  let pool=DATA.items.slice();
   if(bf)pool=pool.filter(i=>i.bankId===bf);
   if(cf)pool=pool.filter(i=>i.cat===cf);
   if(tf){pool=pool.filter(i=>(ensureType(i),i.type)===tf);}
@@ -1613,14 +1632,22 @@ function doSearch(){
     if(cands.length)pool=cands;
   }
   // v2.9 分块评分：对每题取所有块的最高分（单个错字不影响其他块命中）
+  // 【v2.15 改】改用累加：原题命中更多有效块（罕见词），噪声题只命中通用块 → 累加后差距明显
+  //   scoreBlocks 总分 = Σ scoreItem(题, 块) × blockInfo(块)
   const scoreBlocks=(c)=>{
     if(blocks.length<=1)return scoreItem(c,primaryQ);
-    let best=0;
+    let total=0, used=0;
     for(let bi=0;bi<blocks.length;bi++){
-      const s=scoreItem(c,blocks[bi]);
-      if(s>best){best=s;if(best>=20)break;}
+      const info = blockInfo(blocks[bi]);
+      if(info<1)continue;  // 跳过信息分=0 的纯停用词块
+      const s=scoreItem(c,blocks[bi])*info;
+      if(s>0){
+        total+=s;
+        used++;
+        if(total>=120)break;  // 截断上限
+      }
     }
-    return best;
+    return total;
   };
   // 异步分批评分，避免大题库卡死主线程；每批渲染进度
   const total=pool.length;
