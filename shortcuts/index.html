@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>截屏搜题 · 快捷指令安装</title>
+<style>
+  :root{--pri:#2563eb;--pri-d:#1d4ed8;--bg:#eef1f8;}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;margin:0;background:var(--bg);color:#141a26;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;-webkit-font-smoothing:antialiased;}
+  .card{background:#fff;border-radius:22px;box-shadow:0 12px 40px rgba(20,30,60,.12);padding:28px 24px;max-width:400px;width:100%;}
+  .logo{width:64px;height:64px;border-radius:18px;background:linear-gradient(135deg,var(--pri),var(--pri-d));display:flex;align-items:center;justify-content:center;margin:0 auto 14px;box-shadow:0 8px 20px rgba(37,99,235,.3);}
+  .logo svg{width:32px;height:32px;stroke:#fff;}
+  h1{font-size:20px;margin:0 0 4px;text-align:center;}
+  .sub{text-align:center;color:#5f6b7e;font-size:14px;margin-bottom:20px;line-height:1.6;}
+  .btn{display:block;width:100%;padding:15px;border:none;border-radius:14px;font-size:16px;font-weight:700;cursor:pointer;color:#fff;background:linear-gradient(135deg,var(--pri),var(--pri-d));box-shadow:0 8px 20px rgba(37,99,235,.28);text-align:center;text-decoration:none;margin-bottom:12px;}
+  .btn:active{transform:scale(.97);}
+  .btn.ghost{background:#eef1f8;color:var(--pri-d);box-shadow:none;border:1px solid #dfe5f0;}
+  .step{display:flex;gap:12px;align-items:flex-start;margin:10px 0;font-size:14px;line-height:1.6;color:#333;}
+  .step .num{flex:0 0 26px;width:26px;height:26px;border-radius:50%;background:#e9f1ff;color:var(--pri-d);font-weight:700;display:flex;align-items:center;justify-content:center;font-size:13px;margin-top:1px;}
+  .tip{background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:12px;padding:12px 14px;font-size:13px;line-height:1.7;margin-top:16px;}
+  .url{font-size:13px;color:#5f6b7e;background:#f6f8fc;border-radius:8px;padding:8px 10px;word-break:break-all;margin-top:6px;}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">
+    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg>
+  </div>
+  <h1>截屏搜题 · 快捷指令</h1>
+  <div class="sub">在任何 App 里截屏 → 自动打开搜题平台 → 识别并显示答案</div>
+
+  <a class="btn" id="dlBtn" href="截屏搜题.shortcut" download="截屏搜题.shortcut">⬇ 下载并导入快捷指令</a>
+  <a class="btn ghost" href="shortcuts://create-shortcut">手动创建（不下载）</a>
+
+  <div style="margin-top:18px">
+    <div class="step"><span class="num">1</span><div>点上方按钮下载 <b>截屏搜题.shortcut</b>（Safari 打开本页）</div></div>
+    <div class="step"><span class="num">2</span><div>点击下载的文件 → 选 <b>「快捷指令」App</b> 打开</div></div>
+    <div class="step"><span class="num">3</span><div>点 <b>「添加快捷指令」</b>，完成</div></div>
+    <div class="step"><span class="num">4</span><div>做任何题时 <b>先截屏</b>，然后双击手机背面 / 喊 Siri「截屏搜题」/ 点快捷指令图标，自动出答案</div></div>
+  </div>
+
+  <div class="tip">
+    ⚠️ <b>首次添加提示"不受信任"</b>：去「设置 → 快捷指令 → 允许不受信任的快捷指令」打开一次开关，再回来添加即可。<br>
+    前提：已安装 <b>搜题平台 v2.3+</b>（App 图标为"100 考试"），否则链接打不开。
+  </div>
+
+  <div style="margin-top:16px">
+    <div style="font-size:13px;color:#5f6b7e">这个快捷指令做的事（等价于手动配置）：</div>
+    <div class="url">1. 截屏（Take Screenshot）<br>2. 打开 URL：searchbank://ocr-latest</div>
+  </div>
+</div>
+</body>
+</html>
