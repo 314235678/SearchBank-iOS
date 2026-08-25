@@ -202,7 +202,7 @@
   .progress{height:8px;background:var(--line);border-radius:6px;overflow:hidden;}
   .progress .bar{height:100%;background:var(--pri);transition:.3s;}
   .qno{font-size:13px;color:var(--sub);margin:8px 0;}
-  .qtext{font-size:17px;font-weight:600;line-height:1.6;margin-bottom:14px;white-space:pre-wrap;}
+  .qtext{font-size:15px;font-weight:600;line-height:1.5;margin-bottom:12px;white-space:pre-wrap;}
   .opts{display:flex;flex-direction:column;gap:10px;}
   .opt{display:flex;gap:12px;align-items:flex-start;text-align:left;padding:13px 15px;border:1px solid var(--line);border-radius:12px;background:var(--card);transition:.12s;cursor:pointer;}
   .opt:hover{border-color:var(--pri);}
@@ -229,7 +229,7 @@
   .play-tabs{display:flex;gap:6px;background:var(--soft);padding:4px;border-radius:12px;}
   .play-tabs button{border:none;background:transparent;padding:7px 14px;border-radius:9px;font-size:14px;color:var(--sub);cursor:pointer;}
   .play-tabs button.on{background:var(--card);color:var(--pri-d);font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.08);}
-  .auto-next{display:none;align-items:center;gap:8px;margin:14px 0 0;padding:10px 14px;border-radius:12px;font-size:14px;font-weight:600;}
+  .auto-next{display:none;align-items:center;gap:8px;margin:10px 0 0;padding:8px 12px;border-radius:10px;font-size:13px;font-weight:600;}
   .auto-next.on{display:flex;}
   .auto-next.ok{background:#ecfdf3;color:var(--green);}
   .auto-next.no{background:#fef2f2;color:var(--red);}
@@ -259,13 +259,13 @@
   .calc-grid button.op{background:var(--pri-bg);color:var(--pri-d);font-weight:600;}
   .calc-grid button.eq{background:var(--pri);color:#fff;font-weight:700;border-color:var(--pri);}
   .calc-grid button:active{transform:scale(.95);}
-  .play-card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px;box-shadow:var(--shadow);}
+  .play-card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;box-shadow:var(--shadow);}
   .play-meta{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;font-size:13px;color:var(--sub);flex-wrap:wrap;gap:8px;}
   .play-meta .badge{background:var(--pri-bg);color:var(--pri-d);padding:3px 10px;border-radius:999px;font-weight:600;}
   .play-progress-info{display:flex;align-items:center;gap:10px;}
   .play-progress-info b{color:var(--ink);font-size:15px;}
   .qno{font-size:13px;color:var(--sub);margin:8px 0 14px;}
-  .qtext{font-size:17px;font-weight:700;line-height:1.65;margin-bottom:18px;white-space:pre-wrap;}
+  .qtext{font-size:15px;font-weight:700;line-height:1.55;margin-bottom:14px;white-space:pre-wrap;}
   .opt{padding:14px 16px;border:1px solid var(--line);border-radius:13px;background:var(--card);transition:.12s;cursor:pointer;display:flex;align-items:center;gap:12px;text-align:left;}
   .opt:hover{border-color:var(--pri);background:var(--pri-bg);}
   .opt .ol{width:28px;height:28px;border-radius:50%;background:var(--pri-bg);color:var(--pri-d);font-weight:700;display:flex;align-items:center;justify-content:center;font-size:14px;flex:0 0 28px;}
@@ -535,19 +535,31 @@
 .play-progress-bar .qpos.cur{outline:2px solid var(--pri);outline-offset:1px;}
 
 /* 紧凑型题目卡（v2.4） */
-.play-card.v2{padding:18px 18px 14px;border-radius:20px;background:var(--card);border:1px solid var(--line);box-shadow:var(--card-shadow);}
-.play-card.v2 .qmeta{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;}
-.play-card.v2 .qmeta .left{display:flex;gap:8px;align-items:center;color:var(--sub);font-size:13px;}
-.play-card.v2 .qmeta .badge{background:var(--pri-bg);color:var(--pri-d);padding:3px 10px;border-radius:99px;font-weight:600;}
-.play-card.v2 .qno{font-size:13px;color:var(--sub);margin-bottom:6px;}
-.play-card.v2 .qno b{color:var(--pri-d);font-size:18px;}
-.play-card.v2 .qtext{font-size:16.5px;line-height:1.7;white-space:pre-wrap;word-break:break-word;padding:14px 16px;background:var(--soft);border-radius:12px;border-left:4px solid var(--pri2);margin-bottom:14px;}
-.play-card.v2 .opts{display:flex;flex-direction:column;gap:9px;}
-.play-card.v2 .opt{padding:12px 14px;font-size:15px;}
+.play-card.v2{padding:12px 14px 10px;border-radius:16px;background:var(--card);border:1px solid var(--line);box-shadow:var(--card-shadow);}
+.play-card.v2 .qmeta{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap;}
+.play-card.v2 .qmeta .left{display:flex;gap:8px;align-items:center;color:var(--sub);font-size:12.5px;}
+.play-card.v2 .qmeta .badge{background:var(--pri-bg);color:var(--pri-d);padding:2px 9px;border-radius:99px;font-weight:600;font-size:12.5px;}
+.play-card.v2 .qno{font-size:12.5px;color:var(--sub);margin-bottom:4px;}
+.play-card.v2 .qno b{color:var(--pri-d);font-size:16px;}
+.play-card.v2 .qtext{font-size:14.5px;line-height:1.55;white-space:pre-wrap;word-break:break-word;padding:10px 12px;background:var(--soft);border-radius:10px;border-left:3px solid var(--pri2);margin-bottom:10px;}
+.play-card.v2 .opts{display:flex;flex-direction:column;gap:7px;}
+.play-card.v2 .opt{padding:9px 12px;font-size:14px;}
 
 /* 答题卡底部"上一题/下一题"快捷栏 */
-.play-quicknav{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:14px;padding-top:14px;border-top:1px dashed var(--line);}
-.play-quicknav .btn{font-size:13.5px;padding:8px 14px;}
+.play-quicknav{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);}
+.play-quicknav .btn{font-size:13.5px;padding:6px 12px;}
+
+/* ============================================================
+   滑动切题动画（v2.5）—— 左右滑时 #trainPlay 跟随手指平移，
+   切题瞬间用 CSS transform + transition 给出 0.22s 滑入动画
+   ============================================================ */
+#trainPlay{
+  position:relative;
+  touch-action:pan-y;            /* 允许垂直滚动，禁止浏览器水平手势接管 */
+  overflow:hidden;
+}
+#trainPlay.is-sliding{transition:transform .22s ease;}
+#trainPlay .play-card{will-change:transform;}
 
 /* 大版式题库列表（管理页表格化） */
 .qlist-modern{display:grid;grid-template-columns:1fr;gap:10px;}
@@ -817,9 +829,15 @@
         <!-- 顶部大搜索框 -->
         <div style="position:relative;margin-bottom:12px;">
           <input id="searchInput" placeholder="输入关键字（比如：习近平、安全生产、装备精良…）"
-            style="padding:14px 48px 14px 44px;font-size:15px;width:100%;border:1px solid var(--line);border-radius:14px;background:var(--card);">
+            style="padding:14px 90px 14px 44px;font-size:15px;width:100%;border:1px solid var(--line);border-radius:14px;background:var(--card);">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
             style="position:absolute;left:14px;top:50%;transform:translateY(-50%);pointer-events:none"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg>
+          <!-- 一键清空按钮：只在有内容时显示 -->
+          <button id="searchClear" type="button" aria-label="清空" title="清空 (Esc)"
+            style="display:none;position:absolute;right:74px;top:50%;transform:translateY(-50%);
+                   width:28px;height:28px;border-radius:50%;border:none;background:transparent;
+                   color:#94a3b8;cursor:pointer;align-items:center;justify-content:center;font-size:20px;line-height:1;
+                   padding:0;">×</button>
           <button id="searchBtn" class="btn pri" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);padding:7px 16px;border-radius:10px;">搜索</button>
         </div>
         <!-- chip 筛选 -->
@@ -1253,13 +1271,21 @@ $all(".nav button,.bot button").forEach(b=>b.addEventListener("click",()=>go(b.d
 
 /* ============ 概览 ============ */
 /* ============ 主页交互绑定（v2.4 重设计） ============ */
+let __homeV24Bound=false;
 function bindHomeV24(){
-  // 大入口：「顺序练习」/「模拟考试」
-  const es=$("#entrySeq"); if(es && !es.__bound){ es.__bound=1; es.addEventListener("click", ()=>{ go("train"); renderTrain(); setTimeout(()=>{ const b=$all("#trainHome .mode-btn"); if(b&&b[0]) b[0].click(); }, 80); }); }
-  const ee=$("#entryExam"); if(ee && !ee.__bound){ ee.__bound=1; ee.addEventListener("click", ()=>{ go("train"); renderTrain(); setTimeout(()=>{ const b=$("#trainHome .mode-btn-exam"); if(b) b.click(); else openExamSetup({bankId:"all"}); }, 80); }); }
+  // 大入口：「顺序练习」—— 直接 startSession(seq, answer)
+  const es=$("#entrySeq"); if(es && !es.__homeBound_seq){ es.__homeBound_seq=1; es.addEventListener("click", ()=>{
+    go("train"); renderTrain();
+    setTimeout(()=>{ startSession({mode:"answer",order:"seq"}); }, 80);
+  }); }
+  // 大入口：「模拟考试」—— 打开题型配置弹窗
+  const ee=$("#entryExam"); if(ee && !ee.__homeBound_exam){ ee.__homeBound_exam=1; ee.addEventListener("click", ()=>{
+    go("train"); renderTrain();
+    setTimeout(()=>{ openExamSetup({bankId:"all"}); }, 80);
+  }); }
   // 8 格快捷图标 + 计算器（无 data-goto 的特判）
   $all(".shortcut-cell[data-goto], .shortcut-cell#entryCalc").forEach(el=>{
-    if(el.__bound) return; el.__bound=1;
+    if(el.__homeBound_sc) return; el.__homeBound_sc=1;
     el.addEventListener("click", ()=>{
       const t=el.dataset.goto;
       if(el.id==="entryCalc"){ if(window.__SB && window.__SB.calcOpen) window.__SB.calcOpen(true); return; }
@@ -1566,7 +1592,18 @@ function fillSearchFilters(){
 }
 function fillCatFilter(){fillSearchFilters();}
 $("#searchBtn").addEventListener("click",doSearch);
-$("#searchInput").addEventListener("keydown",e=>{if(e.key==="Enter")doSearch();});
+$("#searchInput").addEventListener("keydown",e=>{if(e.key==="Enter")doSearch();else if(e.key==="Escape"){$("#searchInput").value="";$("#searchClear").style.display="none";$("#searchMeta").textContent="";$("#searchResults").innerHTML="";}});
+$("#searchInput").addEventListener("input",()=>{
+  var v=$("#searchInput").value;
+  $("#searchClear").style.display=v?"flex":"none";
+});
+$("#searchClear").addEventListener("click",()=>{
+  var inp=$("#searchInput");if(!inp)return;
+  inp.value="";inp.focus();
+  $("#searchClear").style.display="none";
+  $("#searchMeta").textContent="";
+  $("#searchResults").innerHTML="";
+});
 $("#catFilter").addEventListener("change",doSearch);
 $("#typeFilter").addEventListener("change",doSearch);
 $("#bankFilter").addEventListener("change",doSearch);
@@ -2813,13 +2850,36 @@ function renderOcrUI(area,b64,text,file,origW,origH){
   const taText = (window.__SB && window.__SB.native && window.__SB.__lastOCR && window.__SB.__lastOCR.stem)
     ? ((window.__SB.__lastOCR.mode === "raw") ? window.__SB.__lastOCR.raw : window.__SB.__lastOCR.stem)
     : text;
-  area.innerHTML='<img class="imgprev" src="'+b64+'" alt="题目图片">'+(sizeInfo?'<div class="muted" style="font-size:13px;margin:-6px 0 8px;">'+sizeInfo+'</div>':'')
+  area.innerHTML='<div style="position:relative"><img class="imgprev" src="'+b64+'" alt="题目图片">'
+    +'<button type="button" id="ocrDelImg" aria-label="删除已上传图片" title="删除这张图片" '
+    +'style="position:absolute;top:18px;right:18px;width:36px;height:36px;border-radius:50%;border:none;'
+    +'background:rgba(15,23,42,.7);color:#fff;font-size:20px;line-height:1;cursor:pointer;'
+    +'display:flex;align-items:center;justify-content:center;backdrop-filter:blur(6px);'
+    +'box-shadow:0 4px 10px rgba(0,0,0,.15);font-weight:600;">×</button></div>'
+    +(sizeInfo?'<div class="muted" style="font-size:13px;margin:-6px 0 8px;">'+sizeInfo+'</div>':'')
     + nativeToggle
     +'<div class="field" style="margin-top:10px"><label>识别出的文字（自动 OCR 或手动粘贴）</label><textarea id="ocrText" placeholder="在此粘贴/编辑图片中的题目文字…">'+esc(taText)+'</textarea></div>'
     +'<div class="row"><button class="btn pri" id="ocrSearch">识别并搜题</button>'
     +(hasOCR?'<button class="btn" id="ocrRetry">重新识别</button>':'<button class="btn" id="ocrCfg">配置 OCR（设置里选引擎）</button>')
     +'<button class="btn" id="ocrSave">存为待识别图片</button></div>'
     +'<div id="ocrRes"></div>';
+  // 删除已上传图片（清空 ocrArea，回到 drop 状态）
+  var delImg=area.querySelector("#ocrDelImg");
+  if(delImg){
+    delImg.addEventListener("click",()=>{
+      if(typeof confirm2==="function"){
+        confirm2("删除这张图片","确认要删除已上传的图片吗？识别文字也会一起清空。",()=>{
+          area.innerHTML="";
+          // 同时清掉 __SB.lastOCR 缓存，避免下次还显示旧答案
+          try{if(window.__SB)delete window.__SB.__lastOCR;}catch(e){}
+          toast("已删除图片");
+        });
+      }else{
+        area.innerHTML="";
+        try{if(window.__SB)delete window.__SB.__lastOCR;}catch(e){}
+      }
+    });
+  }
   // 原生 App：切换"提炼 / 全文"
   if (window.__SB && window.__SB.native && window.__SB.__lastOCR && window.__SB.__lastOCR.stem) {
     const wrap = area.querySelector("#ocrNativeToggle");
@@ -3512,6 +3572,7 @@ $("#btnAddBank").addEventListener("click",()=>{
   syncFolderUI();
   fillCatFilter();
   renderHome();
+  bindHomeV24();  // v2.4：v-home 默认 .on，不会再触发 go("home")，所以这里手动绑一次
 })();
 
 /* ============ 出试卷 ============ */
@@ -4491,8 +4552,10 @@ $("#ppBank").addEventListener("change",()=>{renderPPTypeRows();ppState=null;rend
     if (bc) bc.onclick = function () { if (window.__SB && typeof window.__SB.calcOpen === "function") window.__SB.calcOpen(true); };
   }
 
-  // 5) 左右滑动切换题（触摸）—— 整段只绑一次，绑在 IIFE 顶层而不是 bindBoost 里，
+  // 5) 左右滑动切换题（触摸 + 滑动动画 v2.5）—— 整段只绑一次，绑在 IIFE 顶层而不是 bindBoost 里，
   //    避免每次 renderQuestion 都叠一套 touchend handler（一次滑动触发 N 次 → 跳到第 4+98 题 → DOM 膨胀卡死）
+  //    跟手动画：touchmove 实时把 #trainPlay transform 平移 dx；
+  //    切题动画：touchend 后 → 先 translateX(-100%) 把旧题滑出 → renderQuestion 渲染新题 → translateX(100%) → 再 transition .22s 回到 0
   (function bindSwipeOnce() {
     var trainPlay = document.getElementById("trainPlay");
     if (!trainPlay) { setTimeout(bindSwipeOnce, 200); return; }
@@ -4504,12 +4567,21 @@ $("#ppBank").addEventListener("change",()=>{renderPPTypeRows();ppState=null;rend
       startX = e.touches[0].clientX;
       startY = e.touches[0].clientY;
       moved = false;
+      // 移除 transition，让 transform 跟手
+      trainPlay.classList.remove("is-sliding");
     }, { passive: true });
     trainPlay.addEventListener("touchmove", function (e) {
       if (startX === null) return;
       var dx = e.touches[0].clientX - startX;
       var dy = e.touches[0].clientY - startY;
       if (Math.abs(dx) > 12 && Math.abs(dx) > Math.abs(dy)) { moved = true; }
+      // 仅在已经被识别为水平滑动时跟手平移（避免一开始 transform 跳变）
+      if (moved) {
+        // 用 transform 平移 dx；附带一层轻微的视觉衰减（dx 越大平移越多但有限）
+        var w = trainPlay.clientWidth || 360;
+        var damped = dx * Math.min(1, w / Math.max(280, Math.abs(dx) + w));
+        trainPlay.style.transform = "translate3d(" + damped + "px,0,0)";
+      }
     }, { passive: true });
     trainPlay.addEventListener("touchend", function (e) {
       if (startX === null || busy) return;
@@ -4517,21 +4589,59 @@ $("#ppBank").addEventListener("change",()=>{renderPPTypeRows();ppState=null;rend
       var dx = (e.changedTouches[0].clientX - startX);
       var dy = (e.changedTouches[0].clientY - startY);
       startX = null; startY = null;
-      if (!moved || Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy)) { busy = false; return; }
+      if (!moved || Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy)) {
+        // 没触发切题：把 transform 复位
+        trainPlay.classList.add("is-sliding");
+        trainPlay.style.transform = "";
+        setTimeout(function(){ trainPlay.classList.remove("is-sliding"); busy = false; }, 230);
+        return;
+      }
       moved = false;
       if (typeof S === "undefined" || !S || !S.list || S.idx == null) { busy = false; return; }
-      // 用 setTimeout 把 renderQuestion 推到下一个 tick，避免繁忙回调中 paint 未完成导致跳题。
+      // 决定方向
+      var goNext = dx < 0;
+      // 切题判断
+      var canGo = goNext ? (S.idx < S.list.length - 1) : (S.idx > 0);
+      if (!canGo) {
+        // 边界：复位
+        trainPlay.classList.add("is-sliding");
+        trainPlay.style.transform = "";
+        setTimeout(function(){ trainPlay.classList.remove("is-sliding"); busy = false; }, 230);
+        return;
+      }
+      // 进行切题动画
+      var dir = goNext ? -1 : 1;
+      trainPlay.classList.add("is-sliding");
+      trainPlay.style.transform = "translate3d(" + (dir * 100) + "%,0,0)";
+      // 等动画完成（0.22s）后渲染新题 + 反向滑入
       setTimeout(function () {
-        busy = false;
-        if (!S || !S.list) return;
-        if (dx < 0) { // 左滑 → 下一题
+        // 先把题改了
+        if (goNext) {
           var it2 = S.list[S.idx];
           if (it2 && !S.answered[it2.id]) S.results.push({ id: it2.id, correct: null });
-          if (S.idx < S.list.length - 1) { S.idx++; renderQuestion(); } else { finishSession(); }
-        } else { // 右滑 → 上一题
-          if (S.idx > 0) { S.idx--; renderQuestion(); }
+          S.idx++;
+        } else {
+          S.idx--;
         }
-      }, 30);
+        renderQuestion();
+        // 强制先放到屏幕外（dir * 100%）再 transition 滑入
+        trainPlay.style.transition = "none";
+        trainPlay.style.transform = "translate3d(" + (-dir * 100) + "%,0,0)";
+        // 强制回流
+        void trainPlay.offsetWidth;
+        // 重新启用 transition，让它回到 0
+        requestAnimationFrame(function () {
+          trainPlay.style.transition = "";
+          trainPlay.classList.add("is-sliding");
+          trainPlay.style.transform = "";
+          // 动画结束后清理
+          setTimeout(function () {
+            trainPlay.classList.remove("is-sliding");
+            trainPlay.style.transform = "";
+            busy = false;
+          }, 240);
+        });
+      }, 220);
     }, { passive: true });
   })();
 })();
@@ -4686,6 +4796,8 @@ $("#ppBank").addEventListener("change",()=>{renderPPTypeRows();ppState=null;rend
   }
 
   // 共用：把提炼出来的题干放进搜索 + 浮窗
+  // 自动提炼题干搜不到时，会在 800ms 后自动 fallback 到 OCR 原文（raw）再搜一次 —— 解决用户反馈
+  // 「用自动提炼题干搜不到，用识别全文可以」的痛点（提炼逻辑总会丢一些字符，raw 全文命中率高）
   function runSearchWithStem(stem, src) {
     showLoading(false);
     if (typeof go === "function") go("search");
@@ -4693,13 +4805,28 @@ $("#ppBank").addEventListener("change",()=>{renderPPTypeRows();ppState=null;rend
     var bf = $("#bankFilter"); if (bf) bf.value = "";
     var cf = $("#catFilter"); if (cf) cf.value = "";
     if (typeof doSearch === "function") doSearch();
-    showAnsForCurrentResults(stem, src || "图片识别");
+    showAnsForCurrentResults(stem, src || "图片识别", function () {
+      // 当提炼版搜不到结果时，自动 fallback 到原文
+      var raw = (window.__SB && window.__SB.__lastOCR && window.__SB.__lastOCR.raw) || "";
+      // 截取前 240 字避免过长（一般题面含 100-200 字）
+      var rawShort = raw.replace(/\s+/g, " ").slice(0, 240);
+      if (!rawShort || rawShort === stem || rawShort.indexOf(stem.slice(0, 12)) >= 0) return false;
+      if (inp) inp.value = rawShort;
+      // 在 UI 上提示用户「已切换到全文搜索」
+      var pill = $("#ansPill");
+      if (pill) pill.textContent = "全文重搜中…";
+      if (typeof doSearch === "function") doSearch();
+      return true;
+    });
   }
 
   // 读取当前搜索结果前 3 条，渲染到浮窗
   // doSearch 对大题库用 setTimeout 分批跑，这里延迟几次再取，等第一批命中入库
-  function showAnsForCurrentResults(query, srcLabel) {
-    var tries = 0, maxTries = 4;
+  // onEmpty: 当最终无结果时回调，返回 true 表示已经走了 fallback（避免重复）
+  function showAnsForCurrentResults(query, srcLabel, onEmpty) {
+    var tries = 0, maxTries = 5;
+    var fallbackDone = false;
+    var lastCount = 0;
     function tryShow() {
       tries++;
       try {
@@ -4708,15 +4835,28 @@ $("#ppBank").addEventListener("change",()=>{renderPPTypeRows();ppState=null;rend
         var q = (query || "").replace(/\s+/g, " ").slice(0, 28);
         if (q.length > 20) q = q.slice(0, 20) + "…";
         ansHand.textContent = (srcLabel ? srcLabel + " · " : "") + (q || "(空)");
-        ansPill.textContent = cards.length ? "匹配 " + cards.length : (tries < maxTries ? "搜题中…" : "无匹配");
+        ansPill.textContent = cards.length ? "匹配 " + cards.length : (tries < maxTries ? "搜题中…" : (fallbackDone ? "全文也无匹配" : "无匹配"));
         ansBody.innerHTML = cards.length
           ? cards.map(function (el) { return el.outerHTML; }).join("")
           : '<div class="empty" style="padding:30px 12px">' +
-              (tries < maxTries ? "正在搜索，请稍候…" : "未找到匹配的题目。可手动在搜索页输入关键词。") +
+              (tries < maxTries ? "正在搜索，请稍候…" : (fallbackDone ? "原文搜索也没找到。请尝试点击「查看全部」到搜索页手动调整关键词。" : "未找到匹配的题目。")) +
             '</div>';
         ansFloat.classList.add("on");
         ansMask.classList.add("on");
-        if (cards.length || tries >= maxTries) return;
+        if (cards.length) { lastCount = cards.length; return; }
+        if (tries >= maxTries) {
+          // 搜不到时尝试调用 fallback（只能调一次）
+          if (!fallbackDone && typeof onEmpty === "function") {
+            fallbackDone = onEmpty() === true;
+            if (fallbackDone) { tries = 0; setTimeout(tryShow, 80); return; }
+          }
+          return;
+        }
+        if (tries === maxTries - 1 && !fallbackDone && typeof onEmpty === "function") {
+          // 在最后一次重试前主动触发 fallback
+          fallbackDone = onEmpty() === true;
+          if (fallbackDone) { tries = 0; setTimeout(tryShow, 80); return; }
+        }
       } catch (e) { console.warn(e); return; }
       setTimeout(tryShow, 250);
     }

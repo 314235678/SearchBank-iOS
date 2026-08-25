@@ -3,6 +3,13 @@
 > 用户反馈的四个使用问题：① 关 App 数据丢失；② OCR 识别带噪声/不相关；③ 图标是占位纯蓝；④ 双指能拉大。
 > 全部已修，代码本地 commit `29ca9f5`；推到 GitHub 因 PAT 失效未果，用户在 Mac 或本地 git push 即可。
 
+## 8. v2.4 构建交付（2026-08-25 20:05）—— 已推送 + IPA 已出
+
+- commit `cfaa4b0` 推送到 GitHub（`15cb565..cfaa4b0 main -> main`），Actions run `32844942595` **completed success**
+- artifact `SearchBank-unsigned-ipa`（9562144976）已下载解压
+- **产物：`E:\workbuddy\2026-08-25-11-39-00\SearchBank-v2.4.ipa`（1.61MB）**
+- 校验通过：www 三件套（index.html 314736B / app-bridge.js 23289B / 搜题题库.json）在 Payload/SearchBank.app/www/ 下；`v2.4` 标记、`calc-sci/calcMode` 科学计算器、QMARK 内联（app-bridge.js 无 STEM_TRIG var 引用）全部命中
+
 ## 7. v2.4（2026-08-25 19:00+）—— 五个 P0/P1 修复 + 计算器科学模式
 
 > 第二轮反馈：① 普通练习不记录；② 选项阴影位置乱跳；③ 左右滑跳题且滑久卡死；④ FAB 拍照报 `Can't find variable: QMARK`；⑤ 计算器要加科学模式。
