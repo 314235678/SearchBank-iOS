@@ -1,0 +1,49 @@
+# XcodeGen spec for 搜题平台 iOS App
+# 用法（在你的 Mac 上）：
+#   1) brew install xcodegen
+#   2) cd ios-app && xcodegen generate
+#   3) open SearchBank.xcodeproj  (或双击)
+#   4) 选择 Target「SearchBank」→ Signing & Capabilities → Team 选你已有的苹果证书
+#   5) 连接 iPhone 运行，或 Product → Archive → Distribute App 导出 IPA
+name: SearchBank
+options:
+  bundleIdPrefix: com.searchbank
+  deploymentTarget:
+    iOS: "14.0"
+  createIntermediateGroups: true
+  minimumXcodeGenVersion: "2.20.0"
+settings:
+  base:
+    PRODUCT_BUNDLE_IDENTIFIER: com.searchbank.app
+    PRODUCT_NAME: SearchBank
+    SWIFT_VERSION: "5.0"
+    TARGETED_DEVICE_FAMILY: "1,2"
+    CODE_SIGN_STYLE: Automatic
+    # 把下方空字符串改成你的 10 位 Apple Team ID；也可在 Xcode 的 Signing 里直接选 Team
+    DEVELOPMENT_TEAM: ""
+    INFOPLIST_FILE: SearchBank/Info.plist
+    GENERATE_INFOPLIST_FILE: "NO"
+    ENABLE_BITCODE: "NO"
+    SUPPORTS_MACCATALYST: "NO"
+    ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+    DEAD_CODE_STRIPPING: "YES"
+    # WKWebView 需开启运行时对 JIT/内联脚本的支持（iOS 14 默认开，显式声明更稳妥）
+    ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES: "YES"
+targets:
+  SearchBank:
+    type: application
+    platform: iOS
+    sources:
+      - path: SearchBank
+      - path: www
+        buildPhase: resources
+        folder: reference          # 作为「文件夹引用」打进 App，保留 www/ 内部结构（index.html、app-bridge.js、搜题题库.json）
+        excludes:
+          - "**/.DS_Store"
+    settings:
+      base:
+        INFOPLIST_FILE: SearchBank/Info.plist
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    dependencies: []

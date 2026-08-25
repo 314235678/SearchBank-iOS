@@ -1,0 +1,10 @@
+# Xcode / 构建产物
+build/
+Payload/
+SearchBank.xcodeproj/
+*.xcodeproj
+SearchBank.ipa
+*.ipa
+
+# macOS
+.DS_Store

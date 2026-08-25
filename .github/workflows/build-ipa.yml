@@ -1,0 +1,28 @@
+name: Build Unsigned IPA
+
+on:
+  workflow_dispatch:        # 允许在 GitHub 网页上手动点「Run workflow」
+  push:
+    branches: [ main, master ]
+
+jobs:
+  build:
+    runs-on: macos-latest   # 必须 macOS：只有它有 Xcode / iOS SDK 才能编译出 arm64 二进制
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+
+      - name: Install xcodegen
+        run: brew install xcodegen
+
+      - name: Build unsigned IPA
+        run: bash build_unsigned_ipa.sh
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SearchBank-unsigned-ipa
+          path: SearchBank.ipa
