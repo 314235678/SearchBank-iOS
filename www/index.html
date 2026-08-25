@@ -1661,8 +1661,20 @@ function doSearch(){
   // v2.9 分块评分：对每题取所有块的最高分（单个错字不影响其他块命中）
   // 【v2.15 改】改用累加：原题命中更多有效块（罕见词），噪声题只命中通用块 → 累加后差距明显
   //   scoreBlocks 总分 = Σ scoreItem(题, 块) × blockInfo(块)
+  // 【v2.18 关键修复】跟网页版一致：先用【完整 query】评分！
+  //   网页版直接 scoreItem(c, q)，Q.includes(完整query) → 原题整段命中 = 满分 → 排第 1。
+  //   手机版之前只对 10 字块评分，整段匹配能力被切碎，噪声题靠通用词块也能凑分 → 原题被挤到第 7。
+  //   现在：完整 query 整段命中/高相似 → 直接给极高分；否则才退回分块容错（防 OCR 错 1-2 字）。
   const scoreBlocks=(c)=>{
     if(blocks.length<=1)return scoreItem(c,primaryQ);
+    // ---- 1) 完整 query 评分（网页版同款逻辑）----
+    //   20 = 题干精确命中满分(10×STEM_W=20)；fuzzy 高分(>0.75)也算整段高相似
+    const fullScore=scoreItem(c,q);
+    if(fullScore>=15){
+      // 整段命中/高相似 → 放大 100 倍，绝对排第一（模拟网页版"满分优先"）
+      return fullScore*100;
+    }
+    // ---- 2) 否则分块容错（OCR 有错字场景）----
     let total=0, used=0;
     for(let bi=0;bi<blocks.length;bi++){
       const info = blockInfo(blocks[bi]);
