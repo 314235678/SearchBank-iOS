@@ -38,7 +38,7 @@
     if (docx) { [types insertObject:docx atIndex:0]; }
     UIDocumentPickerViewController *picker = [[UIDocumentPickerViewController alloc]
         initForOpeningContentTypes:types asCopy:YES];
-    picker.allowsMultipleSelection = parameters.allowsMultipleSelection;
+    picker.allowsMultipleSelection = [[parameters valueForKey:@"allowsMultipleSelection"] boolValue];
     picker.delegate = self;
     [self.presenter presentViewController:picker animated:YES completion:nil];
 }
