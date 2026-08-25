@@ -37,7 +37,11 @@ class ViewController: UIViewController,
         }
 
         webView = WKWebView(frame: .zero, configuration: config)
-        webView.uiDelegate = self
+        // 用 ObjC shim 处理 <input type=file>，其他 uiDelegate 转回 self
+        // 原因：WKOpenPanelParameters 是 forward-declared，Swift 引用会编译失败
+        let shim = OpenPanelShim(presenter: self, backend: self)
+        objc_setAssociatedObject(webView, "openPanelShim", shim, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+        webView.uiDelegate = shim
         webView.navigationDelegate = self
         webView.translatesAutoresizingMaskIntoConstraints = false
         webView.scrollView.contentInsetAdjustmentBehavior = .never
@@ -529,26 +533,10 @@ extension ViewController: WKNavigationDelegate, WKUIDelegate {
         decisionHandler(.allow)
     }
 
-    /// 让 `<input type="file">` 在 WKWebView 中也能弹出 UIDocumentPicker。
-    /// FAB 在普通浏览器（无 native bridge 时的降级路径）依赖此回调。
-    /// WKOpenPanelParameters 引入版本：iOS 15.0 / Mac Catalyst 14.0。
-    /// 注意：Xcode 26 SDK 中类型标注成 iOS 18.4+，编译时需要忽略 SDK 版本约束
-    /// （用 @available(iOS 15.0, *) 而非更严苛的版本）。
-    @available(iOS 15.0, *)
-    func webView(_ webView: WKWebView,
-                 runOpenPanelWith parameters: WKOpenPanelParameters,
-                 initiatedByFrame frame: WKFrameInfo,
-                 completionHandler: @escaping ([URL]?) -> Void) {
-        var types: [UTType] = [.image]
-        if #available(iOS 15.0, *) {
-            if let docx = UTType(filenameExtension: "docx") { types.insert(docx, at: 0) }
-        }
-        let picker = UIDocumentPickerViewController(forOpeningContentTypes: types, asCopy: true)
-        picker.allowsMultipleSelection = parameters.allowsMultipleSelection ?? false
-        picker.delegate = self
-        openPanelResolve = completionHandler
-        present(picker, animated: true, completion: nil)
-    }
+    // 注：webView(_:runOpenPanelWith:initiatedByFrame:completionHandler:) 方法实现在
+    //     SearchBank/OpenPanelShim.m 里用 Objective-C 写，避免 Swift 引用 forward-declared
+    //     的 WKOpenPanelParameters 类型（编译报 "cannot find type"）。
+    //     Swift 侧只持有 completionHandler 结果 (`openPanelResolve`)。
 
     /// 用 documentPicker 的回调同时路由到 `documentPickerResolve` 和 `openPanelResolve`。
     /// 调用方根据谁设置谁消费。
