@@ -53,13 +53,11 @@ enum DeviceInfo {
     private static func machineModel() -> String {
         var systemInfo = utsname()
         uname(&systemInfo)
-        return withUnsafePointer(to: &systemInfo.machine) { ptr in
-            ptr.withMemoryRebound(
-                to: CChar.self,
-                capacity: MemoryLayout.size(ofValue: systemInfo.machine)
-            ) { cStr in
-                String(cString: cStr)
-            }
+        // 拷贝到局部变量再读取，避免 Swift 6 排他性检查的重叠访问
+        var machine = systemInfo.machine
+        return withUnsafeBytes(of: &machine) { raw in
+            let cStr = raw.bindMemory(to: CChar.self).baseAddress!
+            return String(cString: cStr)
         }
     }
 }
