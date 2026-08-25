@@ -8,3 +8,7 @@ SearchBank.ipa
 
 # macOS
 .DS_Store
+
+# 本地敏感/临时文件
+monitor_build.sh
+*.zip

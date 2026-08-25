@@ -24,6 +24,18 @@ jobs:
           sudo xcode-select -s "$XCODE_PATH/Contents/Developer"
           xcodebuild -version
 
+      - name: Install iOS Simulator Runtime (编译资源目录需要, 与 SDK 匹配)
+        run: |
+          echo "已安装的模拟器运行时："
+          xcrun simctl runtime list || true
+          echo "==> 下载与当前 SDK 匹配的 iOS 模拟器运行时 ..."
+          # 先试免 sudo，失败再用 sudo；下载需联网且占用数 GB 空间
+          xcodebuild -downloadPlatform iOS -architectureVariant arm64 2>&1 \
+            || sudo xcodebuild -downloadPlatform iOS -architectureVariant arm64 2>&1 \
+            || echo "WARN: 运行时下载失败，继续尝试（可能 ODR 关闭已规避 thinned 变体）"
+          echo "==> 下载后运行时列表："
+          xcrun simctl runtime list || true
+
       - name: Install xcodegen
         run: brew install xcodegen
 

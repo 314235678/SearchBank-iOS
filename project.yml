@@ -33,6 +33,10 @@ settings:
     # 在无模拟器的 CI 构建机上会导致 ARCHIVE FAILED。关闭它即可正常归档。
     ASSETCATALOG_COMPILER_GENERATE_ASSET_SYMBOLS: "NO"
     ENABLE_ASSET_SYMBOL_GENERATION: "NO"
+    # Xcode 26 编译资源目录会生成「thinned(按设备精简)」变体，需要已安装的模拟器运行时；
+    # CI 构建机若没有匹配 SDK 的运行时就会 ARCHIVE FAILED。关闭 ODR 与仅编译当前架构资源可规避。
+    ENABLE_ON_DEMAND_RESOURCES: "NO"
+    ENABLE_ONLY_ACTIVE_RESOURCES: "YES"
     # WKWebView 需开启运行时对 JIT/内联脚本的支持（iOS 14 默认开，显式声明更稳妥）
     ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES: "YES"
 targets:
