@@ -835,11 +835,20 @@
         <!-- 顶部搜索框：v2.6 改成 textarea，可显示完整题干、方便手动删除多余选项 -->
         <div style="position:relative;margin-bottom:12px;">
           <textarea id="searchInput" rows="1" placeholder="输入关键字（比如：习近平、安全生产、装备精良…）"
-            style="padding:14px 90px 14px 44px;font-size:15px;width:100%;min-height:46px;max-height:200px;line-height:1.5;
+            style="padding:14px 176px 14px 44px;font-size:15px;width:100%;min-height:46px;max-height:200px;line-height:1.5;
                    border:1px solid var(--line);border-radius:14px;background:var(--card);resize:vertical;
                    overflow:auto;font-family:inherit;"></textarea>
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
             style="position:absolute;left:14px;top:14px;pointer-events:none"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg>
+          <!-- v2.14：粘贴按钮（从剪贴板读文字到输入框） + 一键粘贴并搜 -->
+          <button id="searchPaste" type="button" aria-label="从剪贴板粘贴" title="从剪贴板粘贴到搜索框（再点搜索）"
+            style="display:flex;position:absolute;right:106px;top:10px;
+                   height:28px;padding:0 10px;border-radius:14px;border:1px solid var(--line);
+                   background:var(--soft);color:#16a34a;cursor:pointer;align-items:center;
+                   justify-content:center;font-size:13px;line-height:1;font-weight:600;gap:3px">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
+            粘贴
+          </button>
           <!-- 一键清空按钮：v2.7 始终可见（有内容高亮，无内容半透明），让用户知道有这个功能 -->
           <button id="searchClear" type="button" aria-label="清空搜索内容" title="清空 (Esc)"
             style="display:flex;position:absolute;right:74px;top:10px;
@@ -1760,6 +1769,34 @@ $("#searchInput").addEventListener("input",()=>{
   $("#searchClear").style.opacity=v?"1":".35";
   autoResizeSearch();
 });
+// v2.14：搜索栏"粘贴"按钮 + "粘贴并搜"（"搜索"按钮长按触发）
+function doPasteSearch(auto){
+  // 优先用原生剪贴板（iOS 无 WebView 弹窗），fallback 到 navigator.clipboard
+  var p = (window.__SB && window.__SB.readClipboard) ? window.__SB.readClipboard()
+        : (navigator.clipboard ? navigator.clipboard.readText().catch(function(){return "";}) : Promise.resolve(""));
+  return Promise.resolve(p).then(function(txt){
+    txt = (txt || "").trim();
+    if(!txt){toast("剪贴板为空或非文本");return false;}
+    var inp = $("#searchInput");
+    if(!inp)return false;
+    inp.value = txt;
+    if(typeof autoResizeSearch === "function")autoResizeSearch();
+    if(auto){doSearch();toast("已粘贴并自动搜索（"+(txt.length>20?txt.slice(0,20)+"…":txt)+"）");}
+    else{toast("已粘贴到搜索框（"+(txt.length>20?txt.slice(0,20)+"…":txt)+"），点搜索搜题");}
+    return true;
+  });
+}
+var _searchPasteBtn=document.getElementById("searchPaste");
+if(_searchPasteBtn){
+  _searchPasteBtn.addEventListener("click", function(){ doPasteSearch(false); });
+  // 长按 = 直接粘+搜
+  var _pressTimer=null;
+  _searchPasteBtn.addEventListener("touchstart", function(){ _pressTimer=setTimeout(function(){ doPasteSearch(true); _pressTimer=null; }, 600); }, {passive:true});
+  _searchPasteBtn.addEventListener("touchend", function(){ if(_pressTimer){clearTimeout(_pressTimer); _pressTimer=null;} });
+  _searchPasteBtn.addEventListener("mousedown", function(){ _pressTimer=setTimeout(function(){ doPasteSearch(true); _pressTimer=null; }, 600); });
+  _searchPasteBtn.addEventListener("mouseup", function(){ if(_pressTimer){clearTimeout(_pressTimer); _pressTimer=null;} });
+  _searchPasteBtn.addEventListener("mouseleave", function(){ if(_pressTimer){clearTimeout(_pressTimer); _pressTimer=null;} });
+}
 function autoResizeSearch(){
   var inp=$("#searchInput");if(!inp)return;
   // textarea 自适应高度
