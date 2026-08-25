@@ -38,7 +38,10 @@
     if (docx) { [types insertObject:docx atIndex:0]; }
     UIDocumentPickerViewController *picker = [[UIDocumentPickerViewController alloc]
         initForOpeningContentTypes:types asCopy:YES];
-    picker.allowsMultipleSelection = [[parameters valueForKey:@"allowsMultipleSelection"] boolValue];
+    // WKOpenPanelParameters 在 WebKit 中是 forward-declared 类，无法访问任何属性
+    // （Swift、ObjC、KVC 都报 "forward declaration" 错）。
+    // 保守默认单选；如果 WKWebView 上传需要多选，后续再用私有 API 反射。
+    picker.allowsMultipleSelection = NO;
     picker.delegate = self;
     [self.presenter presentViewController:picker animated:YES completion:nil];
 }
