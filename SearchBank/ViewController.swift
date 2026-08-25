@@ -83,7 +83,16 @@ class ViewController: UIViewController,
             return
         }
         let index = www.appendingPathComponent("index.html")
-        webView.loadFileURL(index, allowingReadAccessTo: www)
+        // v2.17：清除 WKWebView 缓存 + URL 加 ?v= 强制重新加载（v2.15→v2.16 时用户装新 IPA 但页面还是旧的）
+        URLCache.shared.removeAllCachedResponses()
+        webView.configuration.websiteDataStore.httpCookieStore.getAllCookies { _ in }
+        webView.configuration.websiteDataStore.fetchDataRecords(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes()) { records in
+            for r in records {
+                WKWebsiteDataStore.default().removeData(ofTypes: r.dataTypes, for: [r], completionHandler: {})
+            }
+        }
+        let indexURL = URL(string: "file://\(index.path)?v=2.17&t=\(Int(Date().timeIntervalSince1970))")!
+        webView.loadFileURL(indexURL, allowingReadAccessTo: www)
     }
 
     private func showFatal(_ msg: String) {
