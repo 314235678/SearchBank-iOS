@@ -78,6 +78,14 @@
     return post("dataPath", {}).then(function (r) { return (r && r.path) || ""; });
   };
 
+  /** 拍照：弹出系统相机 (UIImagePickerController)，返回 data URL。 */
+  window.__SB.captureImage = function () {
+    return post("captureImage", {}).then(function (r) {
+      if (r && r.error) throw new Error(r.error);
+      return (r && r.dataUrl) || "";
+    });
+  };
+
   window.__SB.device = window.__SB.device || {
     tier: "mid",
     isTablet: false,
@@ -171,21 +179,31 @@
   }
 
   // ===================== OCR：题干提炼 =====================
-  // 噪声词（命中即整行剔除）：这些是常见题库 app/浏览器 UI 元素
+  // 噪声词（命中即整行剔除）：覆盖"考试宝/每日一测/答题卡/答案解析/历史/错题"等做题界面 UI
   var NOISE_WORDS = [
-    "考试宝", "考试吧", "答题", "背题", "语音", "搜题", "单选", "多选",
+    // 通用 App/页面噪声
+    "考试宝", "考试吧", "背题", "语音", "搜题", "单选", "多选",
     "判断题", "填空题", "简答题", "分享", "收藏", "已做题", "关注公众号",
     "扫码", "扫一扫", "AI深", "AI浅", "官方", "微信", "客服",
-    "分享到", "分享给", "更多资料", "下载", "更多"
+    "分享到", "分享给", "更多资料", "下载", "更多", "app", "官方app",
+    // 做题界面专用
+    "答题卡", "限时已过", "限时", "答题结果", "正确答案", "您的回答",
+    "答案解析", "上一题", "下一题", "交卷", "题型", "收藏",
+    "展开", "历史", "错题", "答题", "作答", "查看答案", "本题",
+    "批改", "重做", "重置", "进度", "剩余", "已用", "倒计时",
+    "考试", "练习", "作答", "模考", "我的", "返回", "考题",
+    "重命名", "清空", "导出", "导入"
   ];
-  // URL/邮箱等结构化噪声
+  // 结构化噪声
   var NOISE_REGEXES = [
     /^https?:\/\//i,
     /[\w.+-]+@[\w-]+\.[a-z]{2,}/i,
     /^第\s*\d+\s*页/i,
-    /^\d{4}[\.\-/]\d{1,2}[\.\-/]\d{1,2}/,    // 2024.01.01
-    /^\s*[\d.,:：、\-()（）]+\s*$/,           // 纯符号数字
-    /^\s*[\W_]+\s*$/                         // 全非字母数字
+    /^\d{4}[\.\-/]\d{1,2}[\.\-/]\d{1,2}/,
+    /^\s*[\d.,:：、\-()（）\s]+\s*$/,           // 纯符号数字
+    /^\s*[\W_]+\s*$/,                          // 全非字母数字
+    /^题型[:：]/,
+    /^岗位[:：]/
   ];
 
   function isNoiseLine(s) {
@@ -193,23 +211,32 @@
     for (var i = 0; i < NOISE_REGEXES.length; i++) {
       if (NOISE_REGEXES[i].test(s)) return true;
     }
-    var lower = s.toLowerCase();
     for (var j = 0; j < NOISE_WORDS.length; j++) {
       if (s.indexOf(NOISE_WORDS[j]) >= 0) return true;
     }
+    // 检测 "X/Y"（题号进度行）："1/20"、"11/30" 等孤立短行
+    if (/^\s*\d{1,3}\s*\/\s*\d{1,3}\s*$/.test(s)) return true;
+    // 检测纯题库标题行：题库(4):... 或 题库（4）：...
+    if (/^题库\s*[（(]\s*\d+\s*[）)]\s*[:：]/.test(s)) return true;
     return false;
   }
 
-  // 题干关键词：哪个最先出现就视为题干起点
-  var STEM_TRIG = /(下列|关于|请|以下|哪一?|不属|不属于|属于|正确|错误|说法|表述|指出)/;
-  // "16、" / "16." 形式的题号
-  var STEM_NUM  = /^\s*\d{1,3}\s*[、.]/;
-  var QMARK = /[?？]/;
+  // 题面"末尾"标志（用于识别题面在哪一行结束，起点找 ABCD 选项）
+  var STEM_END_TAIL = /[）\)]\s*[、。.,]?\s*$|[?？]\s*$/;
+  // 题干关键词（题面开头候选）
+  var STEM_TRIG = /(下列|关于|请|以下|哪一?|不属|不属于|属于|说法|表述|指出|根据|依据|符合)/;
+  // "16、"/"16." 题号
+  var STEM_NUM  = /^\s*\d{1,3}\s*[、.]\s*\S/;
+  // 选项正则（宽松：A./A、 / A：）
+  var OPTION_RE = /^\s*[A-Da-d]\s*[.、:：]\s*\S|^[A-Da-d]\s+[^\s]/;
+  // 题面+（）/（）结尾短行（针对判断题"（）"题面）
+  var PARENTH_BLANK = /[（(]\s*[）)]\s*$/;
 
   /**
    * 把识别结果处理成"更适合搜题"的文本。
-   * 入参 raw = OCR 原文（可能多行、可能粘连）
-   * 出参 { stem, raw }：stem = 提炼版；raw = 清理后的原文（去掉噪声行，方便人工编辑）
+   * 主要适配两种界面：
+   *  A) "题号 + 题面 + 选项"（如 题库 16、…）
+   *  B) "做题界面"（题型 + 题面 + A./B./C. 选项）
    */
   function extractQuestionText(raw) {
     if (!raw) return { stem: "", raw: "" };
@@ -218,12 +245,11 @@
     if (/\n/.test(raw)) {
       lineList = String(raw).replace(/\r\n?/g, "\n").split("\n");
     } else {
-      // 用 "前导题号 + 分隔" 启发式分行：A. / B. / C. / 数字 题号
       lineList = String(raw)
-        // 在题号 "16、" 之前插一个换行
-        .replace(/(\s|^)(\d{1,3}\s*[、.])/g, "\n$2")
-        // 在 A./B./C./D. 之前插换行
-        .replace(/(\s|^)([A-Da-d])[\.、:：\s]+/g, "\n$2. ")
+        // 题号 "16、" 前插换行
+        .replace(/(\s|^)(\d{1,3}\s*[、.]\s*[^\s])/g, "\n$2")
+        // A./B./C./D. 前插换行（含 A选项 也包含）
+        .replace(/(\s|^)([A-Da-d])[\.、:：]\s*/g, "\n$2. ")
         // 在 ) 或 ） 后接中文前插换行
         .replace(/([。！？\?\)）])\s*([\u4e00-\u9fa5\d])/g, "$1\n$2")
         .split("\n");
@@ -240,42 +266,71 @@
     }
     if (!cleaned.length) return { stem: "", raw: "" };
 
-    // 找题干起点：含关键词；或行首为题号；或行内含 ?
-    var stemStart = -1;
-    for (var k = 0; k < cleaned.length; k++) {
-      var line = cleaned[k];
-      if (STEM_TRIG.test(line) || QMARK.test(line) || STEM_NUM.test(line)) {
-        stemStart = k;
-        break;
-      }
+    // 找出所有"选项起点"位置：以 A./B./C./D. 开头
+    var optionIdx = [];
+    for (var oi = 0; oi < cleaned.length; oi++) {
+      if (OPTION_RE.test(cleaned[oi])) optionIdx.push(oi);
     }
+    // 选项必须连续不间断，否则视为噪声跳过
+    var firstOpt = optionIdx.length ? optionIdx[0] : -1;
+    var lastOpt  = optionIdx.length ? optionIdx[optionIdx.length - 1] : -1;
+    var optionCountOk = (lastOpt - firstOpt + 1) === optionIdx.length && optionIdx.length >= 2;
 
-    // 提炼 stem：
-    //  - 题干起点存在：从题干起点 + 接下来所有 A/B/C 行及后面不带"分享/收藏/考试宝"之类长尾
-    //  - 题干起点不存在：取最长的连续非噪声块当候选
-    var stem;
-    if (stemStart >= 0) {
-      stem = cleaned.slice(stemStart).join("\n");
-      // 如果到末尾突然冒出来一个噪声短语（很可能是末尾页脚），截断
-      var cutAt = stem.length;
-      for (var t = stemStart + 1; t < cleaned.length; t++) {
-        var remain = cleaned.slice(t).join(" ");
-        if (/分享|收藏|已做题|考试宝|真题|app/i.test(cleaned[t]) && t > stemStart + 1) break;
+    // 找"题面起点"
+    // 规则（按优先级）：
+    //   1) 题面候选 = firstOpt 之前的最后一段连续非噪声文本
+    //      且该段最后一行的尾部是 "（）/）/？/?/。" 中的一个
+    //   2) 失败：firstOpt 之前的整段
+    //   3) 再失败：无选项时用题号/关键词触发
+    var stem = "";
+    if (optionCountOk) {
+      // 题面 = 第一个选项之前的若干行（通常 1-2 行）
+      var stemStart = 0;
+      // 跳过首行如果是题库标题行 / 题号进度行（已在 isNoiseLine 剔除）
+      // 截到第一个选项行之前
+      var stemEnd = firstOpt;
+      // 往前看 1-3 行，合并成题面
+      // 如果 firstOpt 之前的行含 "题干关键词" 或 "题号" 或以"（）结尾"，就取那一行；否则向前合并相邻的中文行
+      for (var pi = firstOpt - 1; pi >= 0; pi--) {
+        var prev = cleaned[pi];
+        if (STEM_TRIG.test(prev) || STEM_NUM.test(prev) || PARENTH_BLANK.test(prev) || /[。！？\?\)）]$/.test(prev)) {
+          stemStart = pi;
+          break;
+        }
       }
-      // 简化版：只截到最后一个 A./B./C./D. 的下一行（如果是 \d+/数字行就丢掉）
-      var lastOption = -1;
-      for (var u = stemStart; u < cleaned.length; u++) {
-        if (/^\s*[A-D]\s*[.、:：]/.test(cleaned[u]) ||
-            /^\s*[A-D]\s*[、.]\s*\S/.test(cleaned[u])) lastOption = u;
-      }
-      if (lastOption >= 0 && lastOption < cleaned.length - 1) {
-        stem = cleaned.slice(stemStart, lastOption + 1).join("\n");
+      // 至少取到 firstOpt 之前那一行（如果有内容）
+      if (stemStart > 0) {
+        // 题面是从 stemStart 开始到 firstOpt-1（不含选项）
+        stem = cleaned.slice(stemStart, firstOpt).join("\n");
+      } else if (firstOpt > 0) {
+        stem = cleaned.slice(0, firstOpt).join("\n");
       } else {
-        stem = cleaned.slice(stemStart).join("\n");
+        // 选项从第 0 行开始——说明没识别到题面（或整张图只有选项）
+        stem = cleaned[lastOpt].replace(/^[A-D][.、]\s*/, "");
       }
+      // 加选项 ABCD
+      stem += "\n" + cleaned.slice(firstOpt, lastOpt + 1).join("\n");
     } else {
-      // 无明显关键词：取整段清理后的文字
-      stem = cleaned.join("\n");
+      // 没有可靠选项；退化用关键词触发
+      var stemStart2 = -1;
+      for (var k = 0; k < cleaned.length; k++) {
+        var line = cleaned[k];
+        if (STEM_TRIG.test(line) || QMARK.test(line) || STEM_NUM.test(line)) {
+          stemStart2 = k;
+          break;
+        }
+      }
+      if (stemStart2 >= 0) {
+        var stopAt = cleaned.length;
+        // 截断：遇到含典型页脚噪声词的就停
+        for (var tt = stemStart2 + 1; tt < cleaned.length; tt++) {
+          if (/分享|收藏|已做题|考试宝|真题|app/i.test(cleaned[tt]) && tt > stemStart2 + 1) { stopAt = tt; break; }
+        }
+        stem = cleaned.slice(stemStart2, stopAt).join("\n");
+      } else {
+        // 最后兜底：取清理后所有非噪声文字
+        stem = cleaned.join("\n");
+      }
     }
 
     return { stem: stem, raw: cleaned.join("\n") };

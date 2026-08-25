@@ -10,10 +10,13 @@ import UniformTypeIdentifiers
 class ViewController: UIViewController,
                       WKScriptMessageHandler,
                       UIDocumentPickerDelegate,
-                      UINavigationControllerDelegate {
+                      UINavigationControllerDelegate,
+                      UIImagePickerControllerDelegate {
 
     private var webView: WKWebView!
     private var documentPickerResolve: (([[String: Any]]) -> Void)?
+    private var cameraResolve: ((String?) -> Void)?
+    private var openPanelResolve: (([URL]?) -> Void)?
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -119,6 +122,8 @@ class ViewController: UIViewController,
             handleSaveData(id: id, payload: payload)
         case "dataPath":
             handleDataPath(id: id)
+        case "captureImage":
+            handleCaptureImage(id: id)
         default:
             respond(id: id, result: ["error": "unknown type: \(type)"])
         }
@@ -191,31 +196,8 @@ class ViewController: UIViewController,
         present(picker, animated: true, completion: nil)
     }
 
-    func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
-        var files: [[String: Any]] = []
-        for url in urls {
-            let secured = url.startAccessingSecurityScopedResource()
-            defer { if secured { url.stopAccessingSecurityScopedResource() } }
-            do {
-                let data = try Data(contentsOf: url)
-                let b64 = data.base64EncodedString()
-                let mime = (try? url.resourceValues(forKeys: [.contentTypeKey]).contentType?.identifier)
-                    ?? "application/octet-stream"
-                files.append(["name": url.lastPathComponent, "mime": mime, "data": b64])
-            } catch {
-                // 忽略单个读取失败的文件
-            }
-        }
-        let resolve = documentPickerResolve
-        documentPickerResolve = nil
-        resolve?(files)
-    }
-
-    func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
-        let resolve = documentPickerResolve
-        documentPickerResolve = nil
-        resolve?([])
-    }
+    // documentPicker 回调实现统一在 WKNavigationDelegate/WKUIDelegate 扩展里
+    // （同时处理 native bridge 和 `<input type="file">` 两条路径）
 
     // MARK: - 导出分享（把 JSON 写入临时文件后用系统分享面板）
 
@@ -257,6 +239,55 @@ class ViewController: UIViewController,
         }
         respond(id: id, result: ["text": text])
     }
+
+    // MARK: - 拍照（FAB 相机按钮使用）
+
+    /// 弹出系统相机，拍照后回传 JPEG data URL 给 JS。
+    /// 真机/模拟器均无效时（iOS 模拟器没有摄像头），回传 error 让 JS 降级为相册选择。
+    private func handleCaptureImage(id: String) {
+        // 检查相机可用性
+        let hasCamera = UIImagePickerController.isSourceTypeAvailable(.camera)
+        guard hasCamera else {
+            respond(id: id, result: ["error": "当前设备不支持相机"])
+            return
+        }
+        let pick = UIImagePickerController()
+        pick.sourceType = .camera
+        pick.cameraCaptureMode = .photo
+        pick.allowsEditing = false
+        pick.delegate = self
+        pick.modalPresentationStyle = .fullScreen
+        cameraResolve = { dataUrl in
+            self.respond(id: id, result: dataUrl.map { ["dataUrl": $0] } ?? ["error": "已取消"])
+        }
+        present(pick, animated: true, completion: nil)
+    }
+
+    // UIImagePickerControllerDelegate
+
+    func imagePickerController(_ picker: UIImagePickerController,
+                               didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
+        let image = (info[.originalImage] as? UIImage)
+        picker.dismiss(animated: true) {
+            let dataUrl: String?
+            if let img = image, let jpeg = img.jpegData(compressionQuality: 0.85) {
+                dataUrl = "data:image/jpeg;base64," + jpeg.base64EncodedString()
+            } else {
+                dataUrl = nil
+            }
+            let r = self.cameraResolve
+            self.cameraResolve = nil
+            r?(dataUrl)
+        }
+    }
+
+    func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+        picker.dismiss(animated: true) {
+            let r = self.cameraResolve
+            self.cameraResolve = nil
+            r?(nil)
+        }
+    }
 }
 
 // MARK: - WKNavigationDelegate / WKUIDelegate
@@ -266,5 +297,62 @@ extension ViewController: WKNavigationDelegate, WKUIDelegate {
                  decidePolicyFor navigationAction: WKNavigationAction,
                  decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
         decisionHandler(.allow)
+    }
+
+    /// 让 `<input type="file">` 在 WKWebView 中也能弹出 UIDocumentPicker。
+    /// FAB 在普通浏览器（无 native bridge 时的降级路径）依赖此回调。
+    func webView(_ webView: WKWebView,
+                 runOpenPanelWith parameters: WKOpenPanelParameters,
+                 initiatedByFrame frame: WKFrameInfo,
+                 completionHandler: @escaping ([URL]?) -> Void) {
+        var types: [UTType] = [.image]
+        if #available(iOS 15.0, *) {
+            if let docx = UTType(filenameExtension: "docx") { types.insert(docx, at: 0) }
+        }
+        let picker = UIDocumentPickerViewController(forOpeningContentTypes: types, asCopy: true)
+        picker.allowsMultipleSelection = parameters.allowsMultipleSelection ?? false
+        picker.delegate = self
+        openPanelResolve = completionHandler
+        present(picker, animated: true, completion: nil)
+    }
+
+    /// 用 documentPicker 的回调同时路由到 `documentPickerResolve` 和 `openPanelResolve`。
+    /// 调用方根据谁设置谁消费。
+    func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+        // 1) 先看是不是 open panel（即来自 <input type="file">）
+        if let openResolve = openPanelResolve {
+            openPanelResolve = nil
+            documentPickerResolve = nil  // 同时清掉另一条
+            openResolve(urls)
+            return
+        }
+        // 2) 否则走 native bridge
+        var files: [[String: Any]] = []
+        for url in urls {
+            let secured = url.startAccessingSecurityScopedResource()
+            defer { if secured { url.stopAccessingSecurityScopedResource() } }
+            do {
+                let data = try Data(contentsOf: url)
+                let b64 = data.base64EncodedString()
+                let mime = (try? url.resourceValues(forKeys: [.contentTypeKey]).contentType?.identifier)
+                    ?? "application/octet-stream"
+                files.append(["name": url.lastPathComponent, "mime": mime, "data": b64])
+            } catch {}
+        }
+        let resolve = documentPickerResolve
+        documentPickerResolve = nil
+        resolve?(files)
+    }
+
+    func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+        if let openResolve = openPanelResolve {
+            openPanelResolve = nil
+            documentPickerResolve = nil
+            openResolve(nil)
+            return
+        }
+        let resolve = documentPickerResolve
+        documentPickerResolve = nil
+        resolve?([])
     }
 }

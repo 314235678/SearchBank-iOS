@@ -101,6 +101,35 @@
   .mask.on{display:flex;}
   /* 通用确认弹窗（#mask）层级高于所有自定义 mask，确保 confirm2 弹窗始终在最前，不会被遮挡 */
   #mask{z-index:60;}
+  /* 浮动搜题按钮（FAB）— 仿"考试宝"悬浮按钮，只能在 App 内悬浮（iOS 沙箱不允许跨 App 悬浮） */
+  .fab{position:fixed;right:18px;bottom:90px;z-index:75;display:flex;flex-direction:column-reverse;align-items:flex-end;gap:10px;}
+  .fab-main{width:54px;height:54px;border-radius:50%;border:none;background:linear-gradient(135deg,var(--pri),var(--pri-d));color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 22px rgba(37,99,235,.4),0 2px 6px rgba(0,0,0,.18);cursor:pointer;transition:transform .12s;font-size:0;}
+  .fab-main:active{transform:scale(.94);}
+  .fab-main svg{width:24px;height:24px;}
+  .fab-pop{display:none;flex-direction:column-reverse;gap:8px;align-items:flex-end;}
+  .fab-pop.on{display:flex;}
+  .fab-btn{padding:8px 14px;border-radius:24px;background:var(--card);border:1px solid var(--line);color:var(--ink);font-size:13px;display:flex;align-items:center;gap:6px;box-shadow:0 2px 8px rgba(0,0,0,.08);cursor:pointer;}
+  .fab-btn:active{background:var(--pri-bg);}
+  /* 浮窗答案卡（图片搜题后从底部弹出） */
+  .ans-float-mask{display:none;position:fixed;inset:0;background:rgba(15,23,42,.35);z-index:88;}
+  .ans-float-mask.on{display:block;}
+  .ans-float{display:none;position:fixed;left:0;right:0;bottom:0;z-index:89;max-height:75vh;background:var(--card);border-radius:18px 18px 0 0;box-shadow:0 -10px 30px rgba(15,23,42,.18);padding:14px 14px 18px;flex-direction:column;gap:10px;overflow:hidden;animation:fabUp .22s ease-out;}
+  .ans-float.on{display:flex;}
+  @keyframes fabUp{from{transform:translateY(100%);}to{transform:translateY(0);}}
+  .ans-float-head{display:flex;align-items:center;gap:8px;}
+  .ans-float-head .pill{background:var(--pri-bg);color:var(--pri-d);font-weight:600;font-size:12px;padding:4px 10px;border-radius:999px;}
+  .ans-float-head .hand{color:var(--sub);font-size:12px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .ans-float-head .close{border:none;background:transparent;color:var(--sub);font-size:20px;cursor:pointer;line-height:1;padding:4px 8px;}
+  .ans-float-head .expand{border:none;background:var(--pri-bg);color:var(--pri-d);font-size:12px;font-weight:600;border-radius:8px;padding:5px 10px;cursor:pointer;}
+  .ans-float-body{overflow:auto;-webkit-overflow-scrolling:touch;display:flex;flex-direction:column;gap:8px;}
+  .ans-float-body .qcard{margin:0;}
+  /* 隐藏图片搜题用的 file input */
+  #fabFile{display:none;}
+  /* loading 圈 */
+  .fab-loading{display:none;position:fixed;left:0;right:0;top:50%;z-index:90;transform:translateY(-50%);text-align:center;color:var(--sub);font-size:14px;pointer-events:none;}
+  .fab-loading.on{display:block;}
+  .fab-loading .spin{display:inline-block;width:36px;height:36px;border:3px solid var(--line);border-top-color:var(--pri);border-radius:50%;animation:spin .8s linear infinite;margin-bottom:10px;}
+  @keyframes spin{to{transform:rotate(360deg);}}
   .modal{background:var(--card);border-radius:16px;max-width:520px;width:100%;max-height:86vh;overflow:auto;padding:20px;}
   .modal h3{margin:0 0 14px;font-size:17px;}
   .modal .foot{display:flex;justify-content:flex-end;gap:10px;margin-top:16px;}
@@ -3377,5 +3406,248 @@ $("#ppBank").addEventListener("change",()=>{renderPPTypeRows();ppState=null;rend
 
 </script>
 <script src="app-bridge.js"></script>
+
+<!-- ======================= 浮动搜题按钮（FAB）+ 浮窗答案卡 ======================= -->
+<div id="fab" class="fab" aria-hidden="false">
+  <button id="fabMain" class="fab-main" type="button" aria-label="悬浮搜题">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <circle cx="11" cy="11" r="7"/>
+      <line x1="21" y1="21" x2="16.5" y2="16.5"/>
+    </svg>
+  </button>
+  <div id="fabPop" class="fab-pop" role="menu">
+    <button type="button" class="fab-btn" data-act="clipboard" role="menuitem">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg>
+      粘贴题干文字搜题
+    </button>
+    <button type="button" class="fab-btn" data-act="camera" role="menuitem">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+      拍一张搜题
+    </button>
+    <button type="button" class="fab-btn" data-act="album" role="menuitem">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+      从相册选图搜题
+    </button>
+  </div>
+</div>
+
+<!-- FAB 用的隐藏 file input：capture 用相机，album 默认从相册 -->
+<input type="file" id="fabFile" accept="image/*">
+
+<!-- 拍照/识图时的 loading 蒙层 -->
+<div id="fabLoading" class="fab-loading"><div class="spin"></div><div>正在识别+搜题…</div></div>
+
+<!-- 浮窗答案卡：从底部弹出，显示前 3 个匹配 -->
+<div id="ansMask" class="ans-float-mask"></div>
+<div id="ansFloat" class="ans-float" role="dialog" aria-label="答案卡片">
+  <div class="ans-float-head">
+    <span class="pill" id="ansPill">匹配</span>
+    <span class="hand" id="ansHand">题干摘要</span>
+    <button class="expand" id="ansExpand" type="button">查看全部</button>
+    <button class="close" id="ansClose" type="button" aria-label="关闭">×</button>
+  </div>
+  <div class="ans-float-body" id="ansBody"></div>
+</div>
+
+<script>
+/* ===================== 悬浮搜题（FAB）行为 ===================== */
+(function () {
+  if (window.__SB.__fabBound) return;
+  window.__SB.__fabBound = true;
+  var fab     = document.getElementById("fab");
+  var fabMain = document.getElementById("fabMain");
+  var fabPop  = document.getElementById("fabPop");
+  var fabFile = document.getElementById("fabFile");
+  var loading = document.getElementById("fabLoading");
+  var ansMask = document.getElementById("ansMask");
+  var ansFloat= document.getElementById("ansFloat");
+  var ansBody = document.getElementById("ansBody");
+  var ansHand = document.getElementById("ansHand");
+  var ansPill = document.getElementById("ansPill");
+  var ansClose= document.getElementById("ansClose");
+  var ansExpand = document.getElementById("ansExpand");
+
+  // 点主按钮 → 弹出菜单 / 收起菜单
+  fabMain.addEventListener("click", function (ev) {
+    ev.stopPropagation();
+    fabPop.classList.toggle("on");
+  });
+  document.addEventListener("click", function (ev) {
+    if (!fab.contains(ev.target)) fabPop.classList.remove("on");
+  });
+  fabPop.addEventListener("click", function (ev) {
+    var btn = ev.target.closest && ev.target.closest("button[data-act]");
+    if (!btn) return;
+    fabPop.classList.remove("on");
+    var act = btn.getAttribute("data-act");
+    if (act === "album") {
+      // 原生环境：走 __SB.pickFiles（UIDocumentPicker，可多选）
+      if (window.__SB && window.__SB.native && typeof window.__SB.pickFiles === "function") {
+        window.__SB.pickFiles().then(function (files) {
+          if (files && files.length) {
+            var f0 = files[0];
+            runNativeFileOcr(f0.data, f0.mime, "fabAlbum");
+          }
+        }).catch(function () { toast("选择文件失败"); });
+      } else {
+        // 浏览器降级：file input
+        fabFile.removeAttribute("capture");
+        fabFile.click();
+      }
+    } else if (act === "camera") {
+      // 原生环境：UIImagePickerController 拍照；浏览器降级：capture 属性的 file input
+      if (window.__SB && window.__SB.native && typeof window.__SB.captureImage === "function") {
+        window.__SB.captureImage().then(function (dataUrl) {
+          if (dataUrl) runNativeBase64Ocr(dataUrl, "fabCamera");
+        }).catch(function (e) { toast("拍照失败：" + (e && e.message ? e.message : e)); });
+      } else {
+        fabFile.setAttribute("capture", "environment");
+        fabFile.click();
+      }
+    } else if (act === "clipboard") {
+      handleClipboard();
+    }
+  });
+
+  // 浏览器降级：file input 选中图片后走 tesseractRecognize
+  fabFile.addEventListener("change", function (e) {
+    var f = e.target.files && e.target.files[0];
+    if (!f) return;
+    e.target.value = "";
+    runOcrSearch(f, "fabAlbum");
+  });
+
+  // 关闭浮窗
+  function closeAns() {
+    ansFloat.classList.remove("on");
+    ansMask.classList.remove("on");
+  }
+  ansClose.addEventListener("click", closeAns);
+  ansMask.addEventListener("click", closeAns);
+  // 查看全部 → 跳到完整搜索页
+  ansExpand.addEventListener("click", function () {
+    closeAns();
+    if (typeof go === "function") go("search");
+  });
+
+  // FAB loading
+  function showLoading(on) { loading.classList.toggle("on", !!on); }
+
+  // 剪贴板：用 navigator.clipboard.readText 拉最近复制文字
+  async function handleClipboard() {
+    try {
+      if (!navigator.clipboard || !navigator.clipboard.readText) {
+        toast("当前浏览器不支持读取剪贴板，请用「从相册选图」"); return;
+      }
+      var txt = await navigator.clipboard.readText();
+      txt = (txt || "").trim();
+      if (!txt) { toast("剪贴板为空或非文本"); return; }
+      // 直接拿剪贴板文字当题干去搜题
+      if (typeof go !== "function" || typeof doSearch !== "function") return;
+      go("search");
+      var inp = $("#searchInput"); if (inp) inp.value = txt;
+      doSearch();
+      showAnsForCurrentResults(txt, "剪贴板");
+    } catch (e) {
+      console.warn(e);
+      toast("读取剪贴板失败：" + (e && e.message ? e.message : e));
+    }
+  }
+
+  // 走 native bridge：base64 + mime → ocr → 搜题
+  function runNativeBase64Ocr(dataUrl, src) {
+    showLoading(true);
+    try {
+      var b64 = String(dataUrl || "");
+      if (b64.indexOf(",") >= 0) b64 = b64.split(",")[1];
+      if (!b64) { toast("图像数据为空"); showLoading(false); return; }
+      window.__SB.ocr(b64).then(function (text) {
+        showLoading(false);
+        text = (text || "").trim();
+        if (!text) { toast("识别结果为空，请重试"); return; }
+        var ex = window.__SB.extractQuestionText ? window.__SB.extractQuestionText(text) : { stem: text };
+        runSearchWithStem(ex.stem || text, src || "图片识别");
+      }).catch(function (e) {
+        showLoading(false);
+        toast("识别失败：" + (e && e.message ? e.message : e));
+      });
+    } catch (e) {
+      showLoading(false);
+      toast("识别失败：" + (e && e.message ? e.message : e));
+    }
+  }
+
+  // 走 native bridge：file.data 已是 b64 → 同样
+  function runNativeFileOcr(b64, mime, src) {
+    if (!b64) { toast("图像数据为空"); return; }
+    runNativeBase64Ocr(b64, src);
+  }
+
+  // 浏览器/file input 路径
+  async function runOcrSearch(file, src) {
+    showLoading(true);
+    try {
+      var stem = "";
+      if (typeof window.tesseractRecognize === "function") {
+        stem = await window.tesseractRecognize(file, function () { /* progress */ });
+      }
+      stem = (stem || "").trim();
+      if (!stem) { toast("识别结果为空，请换张清晰图或手动粘贴"); showLoading(false); return; }
+      runSearchWithStem(stem, src || "图片识别");
+    } catch (e) {
+      console.warn(e);
+      toast("识别/搜题失败：" + (e && e.message ? e.message : e));
+      showLoading(false);
+    }
+  }
+
+  // 共用：把提炼出来的题干放进搜索 + 浮窗
+  function runSearchWithStem(stem, src) {
+    showLoading(false);
+    if (typeof go === "function") go("search");
+    var inp = $("#searchInput"); if (inp) inp.value = stem;
+    var bf = $("#bankFilter"); if (bf) bf.value = "";
+    var cf = $("#catFilter"); if (cf) cf.value = "";
+    if (typeof doSearch === "function") doSearch();
+    showAnsForCurrentResults(stem, src || "图片识别");
+  }
+
+  // 读取当前搜索结果前 3 条，渲染到浮窗
+  // doSearch 对大题库用 setTimeout 分批跑，这里延迟几次再取，等第一批命中入库
+  function showAnsForCurrentResults(query, srcLabel) {
+    var tries = 0, maxTries = 4;
+    function tryShow() {
+      tries++;
+      try {
+        var box = $("#searchResults");
+        var cards = box ? Array.from(box.querySelectorAll(".qcard")).slice(0, 3) : [];
+        var q = (query || "").replace(/\s+/g, " ").slice(0, 28);
+        if (q.length > 20) q = q.slice(0, 20) + "…";
+        ansHand.textContent = (srcLabel ? srcLabel + " · " : "") + (q || "(空)");
+        ansPill.textContent = cards.length ? "匹配 " + cards.length : (tries < maxTries ? "搜题中…" : "无匹配");
+        ansBody.innerHTML = cards.length
+          ? cards.map(function (el) { return el.outerHTML; }).join("")
+          : '<div class="empty" style="padding:30px 12px">' +
+              (tries < maxTries ? "正在搜索，请稍候…" : "未找到匹配的题目。可手动在搜索页输入关键词。") +
+            '</div>';
+        ansFloat.classList.add("on");
+        ansMask.classList.add("on");
+        if (cards.length || tries >= maxTries) return;
+      } catch (e) { console.warn(e); return; }
+      setTimeout(tryShow, 250);
+    }
+    setTimeout(tryShow, 80);
+  }
+
+  // 暴露给外部（如题库做题模式直接喂干题面文本）
+  window.__SB.floatAnswer = function (query, srcLabel) {
+    if (!query) return;
+    if (typeof go === "function") go("search");
+    var inp = $("#searchInput"); if (inp) inp.value = query;
+    if (typeof doSearch === "function") doSearch();
+    showAnsForCurrentResults(query, srcLabel);
+  };
+})();
+</script>
 </body>
 </html>
