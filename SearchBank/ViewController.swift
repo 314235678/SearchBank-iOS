@@ -237,12 +237,18 @@ class ViewController: UIViewController,
         let defaults = UserDefaults.standard
         let whiten = defaults.object(forKey: "sb_ocr_whiten_red") as? Bool ?? true
         let maxEdge = defaults.object(forKey: "sb_ocr_max_edge") as? Int ?? 1600
+        let enhance = defaults.object(forKey: "sb_ocr_enhance") as? Bool ?? true
+        let split = defaults.object(forKey: "sb_ocr_split") as? Bool ?? true
+        let multicand = defaults.object(forKey: "sb_ocr_multicand") as? Bool ?? false
         // v2.7 注释：4% 顶/底 = 1179×2556 截屏上 ~100px，刚好去掉状态栏+灵动岛
         OfflineOCR.recognize(base64: b64,
                              cropHeaderPct: 0.04,
                              cropFooterPct: 0.04,
                              whitenRedBg: whiten,
-                             maxEdge: maxEdge) { text in
+                             maxEdge: maxEdge,
+                             enhance: enhance,
+                             splitRegions: split,
+                             multicand: multicand) { text in
             self.respond(id: id, result: ["text": text ?? ""])
         }
     }

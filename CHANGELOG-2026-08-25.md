@@ -3,6 +3,18 @@
 > 用户反馈的四个使用问题：① 关 App 数据丢失；② OCR 识别带噪声/不相关；③ 图标是占位纯蓝；④ 双指能拉大。
 > 全部已修，代码本地 commit `29ca9f5`；推到 GitHub 因 PAT 失效未果，用户在 Mac 或本地 git push 即可。
 
+## 12. v2.9 构建交付（2026-08-26 01:50+）—— 图像预处理 + 分块搜索 + 多候选 + 分区域（本次）
+
+- 用户确认：Umi-OCR 移植不现实（2-4 周工程），但借鉴其设计方向可行；认可 v2.8 的借鉴方案
+- 本轮四项强化（用户勾选"图像预处理强化 / 分块搜索 / Vision多候选 / 分区域识别"）：
+  1. **Swift 图像预处理**（`OfflineOCR.swift` `enhanceForOCR`）：灰度（饱和度 0）+ 对比度 1.4 + 亮度 -0.04 + 锐化 0.7（CISharpenLuminance）—— 黑白高对比图 Vision 识别率最高
+  2. **Swift 分区域识别**（`splitIntoRegions`）：把图按高度切成上下两半，分别跑 Vision 再合并（大图降采样丢小字；半图分辨率相对高，红色界面卡片居中更容易命中）
+  3. **Swift Vision 多候选**（`multicand`）：每个 observation 输出 `top1|top2|top3`（置信度降序去重），JS 端分块搜索展开多个候选
+  4. **JS 分块搜索**（`chunkQuery` + `scoreBlocks`）：长查询（>10 字）切成 4-6 字滑窗块（步长 3），每块单独 `scoreItem` 取最高分——一个错字只影响相邻块，不再整段 miss；过滤题型标签开头噪声块；`|` 多候选展开为独立块
+- 设置项（UserDefaults）：`sb_ocr_enhance`（预处理）/ `sb_ocr_split`（分区域）/ `sb_ocr_multicand`（多候选），默认 enhance=true、split=true、multicand=false
+- 测试：chunkQuery 长文本覆盖全文（含"甲炕/传感器"尾部块）、短查询保持原样、`|` 多候选展开，全部通过
+- 交付：commit tbd 推 GitHub；Actions run tbd 构建中；产物 SearchBank-v2.9.ipa
+
 ## 11. v2.8 构建交付（2026-08-26 00:50+）—— 红色背景 OCR + 错别字容错（本次）
 
 - 用户反馈：v2.7 仍有很多题识别不出；推荐 Umi-OCR（Windows 桌面 PaddleOCR）；红色背景（"考试复习"）的题根本识别不了

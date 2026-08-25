@@ -1492,6 +1492,37 @@ function scoreItem(c,qn){
   if(C.includes(qn))s+=1;
   return s;
 }
+  // v2.9 分块搜索：长查询（OCR 全文/长题干）切成 4-6 字滑窗块，每块单独评分取最高，
+  //   一个错字只影响相邻块，不再因 1-2 个错字整段 miss
+  // 返回块数组；短查询返回 [q]
+  function chunkQuery(q){
+    if(!q)return [];
+    if(q.length<=10)return [q];
+    const win=6, step=3;
+    const blocks=[];
+    // 先按 | 拆多候选（Vision top3 合并成 "甲|申|由"），展开每个候选为独立块
+    const variants=q.split("|").map(s=>s.trim()).filter(Boolean);
+    for(const v of variants){
+      if(v.length<=10){blocks.push(v);continue;}
+      for(let i=0;i+win<=v.length;i+=step){
+        const b=v.slice(i,i+win);
+        // 过滤纯符号/单字块（无搜索价值）
+        if(/[\u4e00-\u9fa5A-Za-z0-9]{2,}/.test(b))blocks.push(b);
+      }
+      // 尾部残块（确保长文本尾部关键词如"传感器"也被覆盖）
+      if(v.length>win&&(v.length-win)%step!==0){blocks.push(v.slice(-win));}
+      // 如果滑窗没有覆盖到最后 win 字（step=3, win=6 时能覆盖，但保守再补一块）
+      const tail=v.slice(v.length-win);
+      if(blocks.indexOf(tail)<0)blocks.push(tail);
+    }
+    // 去重（保持顺序）
+    const seen=new Set(),out=[];
+    for(const b of blocks){if(!seen.has(b)){seen.add(b);out.push(b);}}
+    // 过滤明显噪声块：纯题型标签（单选/多选/判断题等）开头的块
+    const noiseStart=/^(单选|多选|判断|填空|简答|不定项|材料|案例分析|背题|收藏|分享|答题卡|交卷|题型)/;
+    const filtered=out.filter(b=>!noiseStart.test(b));
+    return (filtered.length?filtered:out).slice(0,28);
+  }
 let _searchToken=0; // 用于取消过期搜索请求
 function doSearch(){
   const raw=$("#searchInput").value.trim();
@@ -1503,6 +1534,9 @@ function doSearch(){
   const box=$("#searchResults");
   const meta=$("#searchMeta");
   const filters=[bf?'题库筛选':'',tf?'题型筛选':'',cf?'分类筛选':''].filter(Boolean);
+  // v2.9 分块：长查询拆成多个 4-6 字块
+  const blocks=chunkQuery(q);
+  const primaryQ=blocks[0]||q;
   let pool=DATA.items.slice();
   if(bf)pool=pool.filter(i=>i.bankId===bf);
   if(cf)pool=pool.filter(i=>i.cat===cf);
@@ -1528,6 +1562,16 @@ function doSearch(){
     const cands=pool.filter(i=>{const hay=cache.get(i.id).Q;return digs.some(d=>hay.includes(d)||hit(hay,d));});
     if(cands.length)pool=cands;
   }
+  // v2.9 分块评分：对每题取所有块的最高分（单个错字不影响其他块命中）
+  const scoreBlocks=(c)=>{
+    if(blocks.length<=1)return scoreItem(c,primaryQ);
+    let best=0;
+    for(let bi=0;bi<blocks.length;bi++){
+      const s=scoreItem(c,blocks[bi]);
+      if(s>best){best=s;if(best>=20)break;}
+    }
+    return best;
+  };
   // 异步分批评分，避免大题库卡死主线程；每批渲染进度
   const total=pool.length;
   if(total>800){
@@ -1539,21 +1583,21 @@ function doSearch(){
       if(token!==_searchToken)return; // 已发起新搜索则丢弃
       const end=Math.min(i+step,total);
       for(;i<end;i++){
-        const s=scoreItem(cache.get(pool[i].id),q);
+        const s=scoreBlocks(cache.get(pool[i].id));
         if(s>0)acc.push({it:pool[i],s});
       }
       meta.textContent='正在搜索… 已匹配 '+acc.length+' 题（'+(end>total?total:end)+'/'+total+'）';
       if(i<total){setTimeout(tick,16);}
-      else{finishSearch(acc,q,filters);}
+      else{finishSearch(acc,primaryQ,filters);}
     };
     setTimeout(tick,16);
   }else{
     const t0=Date.now();
     const acc=[];
-    for(const it of pool){const s=scoreItem(cache.get(it.id),q);if(s>0)acc.push({it,s});}
+    for(const it of pool){const s=scoreBlocks(cache.get(it.id));if(s>0)acc.push({it,s});}
     const ms=Date.now()-t0;
     if(ms>600){meta.textContent='搜索完成（'+ms+'ms）…';}
-    finishSearch(acc,q,filters);
+    finishSearch(acc,primaryQ,filters);
   }
 }
 function finishSearch(acc,q,filters){
