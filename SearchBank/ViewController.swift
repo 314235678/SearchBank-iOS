@@ -226,8 +226,10 @@ class ViewController: UIViewController,
             respond(id: id, result: ["error": "缺少 base64"])
             return
         }
-        // 让 Swift 端做裁切：去掉顶部/底部各 8%，减少页眉页脚、侧边栏噪声
-        OfflineOCR.recognize(base64: b64, cropHeaderPct: 0.08, cropFooterPct: 0.08) { text in
+        // 【v2.7】让 Swift 端做裁切：去掉顶部/底部各 4%（仅够去掉状态栏+灵动岛+底部小白条），
+        //   之前 8% 在 iPhone 截屏上会把"题号"和题干首行裁掉，导致 OCR 只能识别中下部的选项。
+        //   之前 8% 在 1179×2556 截屏上 = 顶 204px / 底 204px，超出状态栏范围，把考试宝题号+题干干掉了。
+        OfflineOCR.recognize(base64: b64, cropHeaderPct: 0.04, cropFooterPct: 0.04) { text in
             self.respond(id: id, result: ["text": text ?? ""])
         }
     }

@@ -3,7 +3,23 @@
 > 用户反馈的四个使用问题：① 关 App 数据丢失；② OCR 识别带噪声/不相关；③ 图标是占位纯蓝；④ 双指能拉大。
 > 全部已修，代码本地 commit `29ca9f5`；推到 GitHub 因 PAT 失效未果，用户在 Mac 或本地 git push 即可。
 
-## 9. v2.6 构建交付（2026-08-25 21:30+）—— 搜索栏 textarea 化 + OCR 剥离选项（本次）
+## 10. v2.7 构建交付（2026-08-25 23:00+）—— FAB 搜题 + OCR 提纯（本次）
+
+- 用户反馈：FAB 快捷指令搜题识别率低；某些题用图片识别的"自动提炼题干"功能可以搜出，但 FAB 只能识别选项搜不出；搜索栏 × 清空按钮看不出
+- 三个根因：
+  1. `isNoiseLine` 把"单选"作为整行噪声词，会把"单选 2、为预防工作面两端发生漏顶"这种"题号+题干"行整行剔除 → stem 只剩选项
+  2. `runSearchWithStem` 的 fallback 条件 `rawShort.indexOf(stem.slice(0,12)) >= 0` 永远成立（stem 子串是选项字符"10m/15m"等总会出现在 raw 中），导致 fallback 永远不触发
+  3. `OfflineOCR.recognize` 的顶/底各 8% 裁切，在 iPhone 截屏 1179×2556 上 = 顶 204px + 底 204px，会把考试宝"题号+题干"裁掉
+- 修复：
+  - `isNoiseLine`：把"单选/多选/判断题/填空题/简答题"等题型标签改为"独立成行"才剔除（不误伤"单选 2、为预防..."这种题干行）
+  - `runSearchWithStem`：fallback 条件改用 `__lastOCR.cleaned`（去噪后的全文），不阻断；触发时给 toast 提示"已切换到全文搜索"
+  - `ViewController.handleOCR`：cropHeaderPct/cropFooterPct 8% → 4%（仅够去掉状态栏+灵动岛，保留题目首行）
+  - 搜索栏 × 清空按钮：v2.5 已有但只在有内容时显示（不易发现）→ v2.7 改为始终可见（空内容时 opacity: 0.35 半透明），让用户知道有这个功能
+- 测试：用 Node 模拟 6 道例题跑 `extractQuestionText`，全部正确提取题干+选项（之前全部失败只有选项）
+- 仓库恢复：v2.7 修改期间一次 `git stash` 损坏了 .git（refs 目录被清），通过 `git init + fetch + reset --hard e1c5f6e` 重建，工作区修改从备份恢复
+- 交付：commit `tbd` 推送到 GitHub main；Actions run tbd 构建中；产物 SearchBank-v2.7.ipa
+
+## 9. v2.6 构建交付（2026-08-25 21:30+）—— 搜索栏 textarea 化 + OCR 剥离选项
 
 - 用户反馈两个剩余问题：
   - 图片识别页面题干带 ABCD 选项，搜题匹配不到

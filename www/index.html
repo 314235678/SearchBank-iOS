@@ -834,12 +834,12 @@
                    overflow:auto;font-family:inherit;"></textarea>
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
             style="position:absolute;left:14px;top:14px;pointer-events:none"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg>
-          <!-- 一键清空按钮：只在有内容时显示 -->
-          <button id="searchClear" type="button" aria-label="清空" title="清空 (Esc)"
-            style="display:none;position:absolute;right:74px;top:10px;
+          <!-- 一键清空按钮：v2.7 始终可见（有内容高亮，无内容半透明），让用户知道有这个功能 -->
+          <button id="searchClear" type="button" aria-label="清空搜索内容" title="清空 (Esc)"
+            style="display:flex;position:absolute;right:74px;top:10px;
                    width:28px;height:28px;border-radius:50%;border:none;background:transparent;
                    color:#94a3b8;cursor:pointer;align-items:center;justify-content:center;font-size:20px;line-height:1;
-                   padding:0;">×</button>
+                   padding:0;opacity:.35;transition:opacity .15s;">×</button>
           <button id="searchBtn" class="btn pri" style="position:absolute;right:6px;top:8px;padding:7px 16px;border-radius:10px;">搜索</button>
         </div>
         <!-- chip 筛选 -->
@@ -1594,10 +1594,10 @@ function fillSearchFilters(){
 }
 function fillCatFilter(){fillSearchFilters();}
 $("#searchBtn").addEventListener("click",doSearch);
-$("#searchInput").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey&&!e.isComposing){e.preventDefault();doSearch();}else if(e.key==="Escape"){$("#searchInput").value="";$("#searchClear").style.display="none";$("#searchMeta").textContent="";$("#searchResults").innerHTML="";autoResizeSearch();}});
+$("#searchInput").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey&&!e.isComposing){e.preventDefault();doSearch();}else if(e.key==="Escape"){$("#searchInput").value="";$("#searchClear").style.opacity=".35";$("#searchMeta").textContent="";$("#searchResults").innerHTML="";autoResizeSearch();}});
 $("#searchInput").addEventListener("input",()=>{
   var v=$("#searchInput").value;
-  $("#searchClear").style.display=v?"flex":"none";
+  $("#searchClear").style.opacity=v?"1":".35";
   autoResizeSearch();
 });
 function autoResizeSearch(){
@@ -1612,9 +1612,10 @@ function autoResizeSearch(){
 $("#searchClear").addEventListener("click",()=>{
   var inp=$("#searchInput");if(!inp)return;
   inp.value="";inp.focus();
-  $("#searchClear").style.display="none";
+  $("#searchClear").style.opacity=".35";
   $("#searchMeta").textContent="";
   $("#searchResults").innerHTML="";
+  if(typeof autoResizeSearch==="function")autoResizeSearch();
 });
 $("#catFilter").addEventListener("change",doSearch);
 $("#typeFilter").addEventListener("change",doSearch);
@@ -4846,8 +4847,10 @@ $("#ppBank").addEventListener("change",()=>{renderPPTypeRows();ppState=null;rend
   }
 
   // 共用：把提炼出来的题干放进搜索 + 浮窗
-  // 自动提炼题干搜不到时，会在 800ms 后自动 fallback 到 OCR 原文（raw）再搜一次 —— 解决用户反馈
-  // 「用自动提炼题干搜不到，用识别全文可以」的痛点（提炼逻辑总会丢一些字符，raw 全文命中率高）
+  // 自动提炼题干搜不到时，会在最后一次重试后自动 fallback 到 OCR 清理后全文（__lastOCR.cleaned）再搜一次
+  // 【v2.7 修复】fallback 条件放宽：不再因为 rawShort "包含 stem 的前 12 字符" 而放弃（之前 stem 是选项子串
+  //   总会出现在 raw 里，导致 fallback 永远不触发）
+  // 【v2.7】fallback 文本改用 cleaned（去噪声行后的全文）而不是 raw（含状态栏、④ 00:43:40 等）
   function runSearchWithStem(stem, src) {
     showLoading(false);
     if (typeof go === "function") go("search");
@@ -4857,15 +4860,21 @@ $("#ppBank").addEventListener("change",()=>{renderPPTypeRows();ppState=null;rend
     var cf = $("#catFilter"); if (cf) cf.value = "";
     if (typeof doSearch === "function") doSearch();
     showAnsForCurrentResults(stem, src || "图片识别", function () {
-      // 当提炼版搜不到结果时，自动 fallback 到原文
-      var raw = (window.__SB && window.__SB.__lastOCR && window.__SB.__lastOCR.raw) || "";
-      // 截取前 240 字避免过长（一般题面含 100-200 字）
-      var rawShort = raw.replace(/\s+/g, " ").slice(0, 240);
-      if (!rawShort || rawShort === stem || rawShort.indexOf(stem.slice(0, 12)) >= 0) return false;
+      // 提炼版搜不到 → fallback 到清理后的全文
+      var lastOCR = (window.__SB && window.__SB.__lastOCR) || {};
+      var cleaned = lastOCR.cleaned || lastOCR.raw || "";
+      // 用 cleaned（去噪行后），按换行拼接回 240 字内的"全文"；保留题干 + 选项，去掉状态栏/计时/分享按钮
+      var rawShort = cleaned.split(/\r?\n/).filter(function (l) { return l && l.trim(); }).join(" ").slice(0, 280);
+      if (!rawShort || rawShort === stem) {
+        // 连 cleaned 都跟 stem 完全一样，那确实没别的可搜了
+        return false;
+      }
       if (inp) inp.value = rawShort;
+      if (typeof autoResizeSearch === "function") autoResizeSearch();
       // 在 UI 上提示用户「已切换到全文搜索」
       var pill = $("#ansPill");
       if (pill) pill.textContent = "全文重搜中…";
+      if (typeof toast === "function") toast("已切换到全文搜索（自动提炼未命中）");
       if (typeof doSearch === "function") doSearch();
       return true;
     });
