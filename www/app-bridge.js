@@ -1,8 +1,8 @@
 /* =====================================================================
  * 搜题平台 · iOS 桥接层（app-bridge.js）
  * 仅在原生 App（WKWebView，window.webkit.messageHandlers.bridge 存在）中
- * 接管 OCR / 文件导入 / 导出分享，并做设备自适应；网页版在普通浏览器中
- * 打开时本文件自动降级为原逻辑（Tesseract / OCR.space / 原生文件选择）。
+ * 接管 OCR / 文件导入 / 导出分享 / 本地持久化，并做设备自适应。
+ * 网页版在普通浏览器中打开时本文件自动降级为原逻辑。
  * ===================================================================== */
 (function () {
   "use strict";
@@ -64,6 +64,20 @@
       return r.text || "";
     });
   };
+  window.__SB.loadData = function () {
+    return post("loadData", {}).then(function (r) {
+      return r && typeof r.text === "string" ? r.text : "";
+    });
+  };
+  window.__SB.saveData = function (text) {
+    return post("saveData", { text: text }).then(function (r) {
+      return !(r && r.error);
+    });
+  };
+  window.__SB.dataPath = function () {
+    return post("dataPath", {}).then(function (r) { return (r && r.path) || ""; });
+  };
+
   window.__SB.device = window.__SB.device || {
     tier: "mid",
     isTablet: false,
@@ -82,24 +96,58 @@
     style.textContent = [
       ":root{--sat:env(safe-area-inset-top);--sab:env(safe-area-inset-bottom);--sal:env(safe-area-inset-left);--sar:env(safe-area-inset-right);}",
       "body{padding-top:var(--sat);padding-bottom:var(--sab);padding-left:var(--sal);padding-right:var(--sar);}",
-      // 低端机：关闭动画/过渡，弱化阴影与毛玻璃，省电更流畅
       ".tier-low *{animation:none !important;transition:none !important;}",
       ".tier-low .card,.tier-low .modal,.tier-low .mask{box-shadow:0 1px 2px rgba(0,0,0,.12) !important;-webkit-backdrop-filter:none !important;backdrop-filter:none !important;}",
       ".tier-low img.imgprev{max-width:100%;}",
-      // 高端机：增强层次感
       ".tier-high .card{box-shadow:0 10px 30px rgba(15,23,42,.10);}",
       ".tier-high .modal{box-shadow:0 20px 60px rgba(15,23,42,.18);}",
-      // 平板：加宽内容，提升可读性
       ".is-tablet .wrap{max-width:980px;margin:0 auto;}",
-      // 尊重系统“减少动态效果”
       "@media (prefers-reduced-motion: reduce){*{animation:none !important;transition:none !important;}}",
-      // 让 WebView 内可正常选中/复制文字
-      "img{max-width:100%;}"
+      "img{max-width:100%;}",
+      "*{-webkit-touch-callout:none;}"
     ].join("\n");
     document.head.appendChild(style);
   }
 
-  // ===================== 首次启动：载入包内题库 =====================
+  // ===================== 首次启动：从本地文件载入 =====================
+  function loadFromNative() {
+    if (!native) return Promise.resolve(false);
+    return window.__SB.loadData().then(function (text) {
+      if (!text) return false;
+      try {
+        var d = JSON.parse(text);
+        if (d && (Array.isArray(d.items) || Array.isArray(d.banks))) {
+          if (Array.isArray(d.items))  DATA.items  = d.items;
+          if (Array.isArray(d.banks))  DATA.banks  = d.banks;
+          try { localStorage.setItem("sb_seeded_from_file", "1"); } catch (e) {}
+          return true;
+        }
+      } catch (e) { console.warn("native data parse failed", e); }
+      return false;
+    }).catch(function () { return false; });
+  }
+
+  // ===================== 让 save() 在原生环境多写一份到沙盒文件 =====================
+  function patchSave() {
+    if (!native) return;
+    if (window.__SB.__savePatched) return;
+    window.__SB.__savePatched = true;
+    var _save = window.save;
+    if (typeof _save !== "function") return;
+    window.save = function () {
+      var ok = true;
+      try { _save(); } catch (e) { ok = false; }
+      try {
+        var text = JSON.stringify(DATA);
+        window.__SB.saveData(text).then(function (wrote) {
+          if (!wrote) console.warn("native saveData failed");
+        });
+      } catch (e) { /* JSON.stringify unlikely */ }
+      return ok;
+    };
+  }
+
+  // ===================== 首次启动：载入包内题库（兜底） =====================
   function seedIfNeeded() {
     try {
       if (!native) return;
@@ -111,7 +159,7 @@
           if (bank && Array.isArray(bank.items) && bank.items.length) {
             DATA.items = bank.items;
             if (Array.isArray(bank.banks)) DATA.banks = bank.banks;
-            save();
+            try { window.save(); } catch (e) {}
             localStorage.setItem("sb_seeded", "1");
             if (typeof renderHome === "function") renderHome();
             if (typeof fillCatFilter === "function") fillCatFilter();
@@ -122,10 +170,122 @@
     } catch (e) { console.warn("seed failed", e); }
   }
 
-  // ===================== 让 OCR 走原生离线引擎 =====================
+  // ===================== OCR：题干提炼 =====================
+  // 噪声词（命中即整行剔除）：这些是常见题库 app/浏览器 UI 元素
+  var NOISE_WORDS = [
+    "考试宝", "考试吧", "答题", "背题", "语音", "搜题", "单选", "多选",
+    "判断题", "填空题", "简答题", "分享", "收藏", "已做题", "关注公众号",
+    "扫码", "扫一扫", "AI深", "AI浅", "官方", "微信", "客服",
+    "分享到", "分享给", "更多资料", "下载", "更多"
+  ];
+  // URL/邮箱等结构化噪声
+  var NOISE_REGEXES = [
+    /^https?:\/\//i,
+    /[\w.+-]+@[\w-]+\.[a-z]{2,}/i,
+    /^第\s*\d+\s*页/i,
+    /^\d{4}[\.\-/]\d{1,2}[\.\-/]\d{1,2}/,    // 2024.01.01
+    /^\s*[\d.,:：、\-()（）]+\s*$/,           // 纯符号数字
+    /^\s*[\W_]+\s*$/                         // 全非字母数字
+  ];
+
+  function isNoiseLine(s) {
+    if (!s || s.length <= 1) return true;
+    for (var i = 0; i < NOISE_REGEXES.length; i++) {
+      if (NOISE_REGEXES[i].test(s)) return true;
+    }
+    var lower = s.toLowerCase();
+    for (var j = 0; j < NOISE_WORDS.length; j++) {
+      if (s.indexOf(NOISE_WORDS[j]) >= 0) return true;
+    }
+    return false;
+  }
+
+  // 题干关键词：哪个最先出现就视为题干起点
+  var STEM_TRIG = /(下列|关于|请|以下|哪一?|不属|不属于|属于|正确|错误|说法|表述|指出)/;
+  // "16、" / "16." 形式的题号
+  var STEM_NUM  = /^\s*\d{1,3}\s*[、.]/;
+  var QMARK = /[?？]/;
+
+  /**
+   * 把识别结果处理成"更适合搜题"的文本。
+   * 入参 raw = OCR 原文（可能多行、可能粘连）
+   * 出参 { stem, raw }：stem = 提炼版；raw = 清理后的原文（去掉噪声行，方便人工编辑）
+   */
+  function extractQuestionText(raw) {
+    if (!raw) return { stem: "", raw: "" };
+    // Vision 在移动端小屏上常常把多块文本拼到一起不换行，先尝试按常见分隔符拆
+    var lineList;
+    if (/\n/.test(raw)) {
+      lineList = String(raw).replace(/\r\n?/g, "\n").split("\n");
+    } else {
+      // 用 "前导题号 + 分隔" 启发式分行：A. / B. / C. / 数字 题号
+      lineList = String(raw)
+        // 在题号 "16、" 之前插一个换行
+        .replace(/(\s|^)(\d{1,3}\s*[、.])/g, "\n$2")
+        // 在 A./B./C./D. 之前插换行
+        .replace(/(\s|^)([A-Da-d])[\.、:：\s]+/g, "\n$2. ")
+        // 在 ) 或 ） 后接中文前插换行
+        .replace(/([。！？\?\)）])\s*([\u4e00-\u9fa5\d])/g, "$1\n$2")
+        .split("\n");
+    }
+
+    // 清洗
+    var cleaned = [];
+    for (var i = 0; i < lineList.length; i++) {
+      var s = String(lineList[i] || "");
+      s = s.replace(/[\s\u3000]+/g, " ").trim();
+      if (!s) continue;
+      if (isNoiseLine(s)) continue;
+      cleaned.push(s);
+    }
+    if (!cleaned.length) return { stem: "", raw: "" };
+
+    // 找题干起点：含关键词；或行首为题号；或行内含 ?
+    var stemStart = -1;
+    for (var k = 0; k < cleaned.length; k++) {
+      var line = cleaned[k];
+      if (STEM_TRIG.test(line) || QMARK.test(line) || STEM_NUM.test(line)) {
+        stemStart = k;
+        break;
+      }
+    }
+
+    // 提炼 stem：
+    //  - 题干起点存在：从题干起点 + 接下来所有 A/B/C 行及后面不带"分享/收藏/考试宝"之类长尾
+    //  - 题干起点不存在：取最长的连续非噪声块当候选
+    var stem;
+    if (stemStart >= 0) {
+      stem = cleaned.slice(stemStart).join("\n");
+      // 如果到末尾突然冒出来一个噪声短语（很可能是末尾页脚），截断
+      var cutAt = stem.length;
+      for (var t = stemStart + 1; t < cleaned.length; t++) {
+        var remain = cleaned.slice(t).join(" ");
+        if (/分享|收藏|已做题|考试宝|真题|app/i.test(cleaned[t]) && t > stemStart + 1) break;
+      }
+      // 简化版：只截到最后一个 A./B./C./D. 的下一行（如果是 \d+/数字行就丢掉）
+      var lastOption = -1;
+      for (var u = stemStart; u < cleaned.length; u++) {
+        if (/^\s*[A-D]\s*[.、:：]/.test(cleaned[u]) ||
+            /^\s*[A-D]\s*[、.]\s*\S/.test(cleaned[u])) lastOption = u;
+      }
+      if (lastOption >= 0 && lastOption < cleaned.length - 1) {
+        stem = cleaned.slice(stemStart, lastOption + 1).join("\n");
+      } else {
+        stem = cleaned.slice(stemStart).join("\n");
+      }
+    } else {
+      // 无明显关键词：取整段清理后的文字
+      stem = cleaned.join("\n");
+    }
+
+    return { stem: stem, raw: cleaned.join("\n") };
+  }
+
+  window.__SB.extractQuestionText = extractQuestionText;
+
+  // ===================== 覆盖 tesseractRecognize：走原生离线 OCR + 自动提炼 =====================
   function patchOCR() {
     if (!native) return;
-    // 覆盖 tesseractRecognize：原网页的「本地识别」分支与「重新识别」按钮都会走到这里
     var _orig = window.tesseractRecognize;
     window.tesseractRecognize = function (file, onProg) {
       if (onProg) onProg({ status: "本地离线识别中…" });
@@ -135,6 +295,18 @@
           catch (e) { return readAsDataURL(file); }
         })
         .then(function (b64) { return window.__SB.ocr(b64); })
+        .then(function (text) {
+          var ex = window.__SB.extractQuestionText(text);
+          // 把全文/清理版挂到原生能力上，UI 可选切换；返回值仍是 string
+          // （保持与网页版原 tesseractRecognize 的接口兼容，避免破坏其它调用方）
+          window.__SB.__lastOCR = {
+            raw:     text,         // OCR 识别原文
+            cleaned: ex.raw,       // 去掉噪声行后的全文
+            stem:    ex.stem,      // 自动提炼的"题干+选项"
+            mode:    "stem"
+          };
+          return ex.stem || text;
+        })
         .catch(function (e) {
           if (_orig) return _orig(file, onProg);
           throw e;
@@ -142,7 +314,7 @@
     };
   }
 
-  // ===================== 让「导出备份」走系统分享面板 =====================
+  // ===================== 让"导出备份"走系统分享面板 =====================
   function patchExport() {
     if (!native) return;
     var _orig = window.exportJSON;
@@ -178,7 +350,6 @@
     return new Blob([arr], { type: mime || "application/octet-stream" });
   }
 
-  // 网页版导出 .json 的合并逻辑（与内联脚本 #restoreInput 处理一致）
   window.ingestBackup = function (text) {
     var d = JSON.parse(text);
     if (!d.items || !Array.isArray(d.items)) throw new Error("格式不对");
@@ -190,7 +361,7 @@
         (DATA.banks || []).forEach(function (b) { ids[b.id] = true; });
         d.banks.forEach(function (b) { if (!ids[b.id]) { DATA.banks.push(b); ids[b.id] = true; } });
       }
-      save();
+      try { window.save(); } catch (e) { /* patchSave 已包 */ }
       if (typeof fillCatFilter === "function") fillCatFilter();
       toast("已恢复 " + d.items.length + " 条");
     });
@@ -227,7 +398,7 @@
   }
 
   function interceptImport(buttonId) {
-    if (!native) return; // 仅在原生 App 内拦截；普通浏览器保持原文件选择逻辑
+    if (!native) return;
     var btn = document.getElementById(buttonId);
     if (!btn) return;
     btn.addEventListener(
@@ -242,17 +413,29 @@
           })
           .catch(function () { toast("选择文件失败"); });
       },
-      true // 捕获阶段拦截，阻止原 file input 弹窗
+      true
     );
   }
 
   function boot() {
     applyAdaptive();
+    patchSave();          // 必须在 patchExport 之前（依赖 window.save 存在）
     patchOCR();
     patchExport();
     interceptImport("btnImport");
     interceptImport("drop");
-    seedIfNeeded();
+    // 启动顺序：先同步种子覆盖（从 IndexedDB/localStorage），再异步从文件覆盖
+    Promise.resolve()
+      .then(loadFromNative)
+      .then(function (loaded) {
+        if (loaded) {
+          if (typeof renderHome === "function") renderHome();
+          if (typeof fillCatFilter === "function") fillCatFilter();
+          toast("已从本机文件恢复题库（" + (DATA.items ? DATA.items.length : 0) + " 条）");
+        } else {
+          seedIfNeeded();
+        }
+      });
   }
 
   if (document.readyState === "loading") {

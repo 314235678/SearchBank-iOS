@@ -4,7 +4,9 @@ import UniformTypeIdentifiers
 
 /// 搜题平台 iOS 外壳：用 WKWebView 承载网页版全部功能，
 /// 通过名为 "bridge" 的 WKScriptMessageHandler 与网页 JS 通信，
-/// 提供：离线 OCR（Vision）、文件导入（DocumentPicker）、导出分享、设备分级。
+/// 提供：离线 OCR（Vision）、文件导入（DocumentPicker）、导出分享、
+///       本地数据持久化（LocalStore → Documents/SearchBank/data.json）、
+///       设备分级。
 class ViewController: UIViewController,
                       WKScriptMessageHandler,
                       UIDocumentPickerDelegate,
@@ -16,6 +18,8 @@ class ViewController: UIViewController,
     override func viewDidLoad() {
         super.viewDidLoad()
         setupWebView()
+        // 启动时确保 Documents 下的 data.json 在 Files App 可见
+        LocalStore.ensureFinderVisible()
         loadApp()
     }
 
@@ -37,6 +41,12 @@ class ViewController: UIViewController,
         webView.scrollView.contentInsetAdjustmentBehavior = .never
         webView.scrollView.bounces = true
         webView.allowsLinkPreview = false
+
+        // ✅ 禁止双指缩放 / 双击放大：让它像真正 App 而不是浏览器
+        webView.scrollView.pinchGestureRecognizer?.isEnabled = false
+        webView.scrollView.minimumZoomScale = 1.0
+        webView.scrollView.maximumZoomScale = 1.0
+
         view.addSubview(webView)
 
         NSLayoutConstraint.activate([
@@ -103,6 +113,12 @@ class ViewController: UIViewController,
             handleShareExport(id: id, payload: payload)
         case "getBundledBank":
             handleBundledBank(id: id)
+        case "loadData":
+            handleLoadData(id: id)
+        case "saveData":
+            handleSaveData(id: id, payload: payload)
+        case "dataPath":
+            handleDataPath(id: id)
         default:
             respond(id: id, result: ["error": "unknown type: \(type)"])
         }
@@ -119,6 +135,31 @@ class ViewController: UIViewController,
         webView.evaluateJavaScript(js, completionHandler: nil)
     }
 
+    // MARK: - 本地数据持久化（取代 localStorage）
+
+    /// JS 启动时调用：拿本地 data.json（不存在返回空串，让前端走 seed）。
+    private func handleLoadData(id: String) {
+        let text = LocalStore.read() ?? ""
+        respond(id: id, result: ["text": text])
+    }
+
+    /// JS 改完题库后调用：原样写回 Documents/SearchBank/data.json。
+    private func handleSaveData(id: String, payload: [String: Any]) {
+        guard let text = payload["text"] as? String else {
+            respond(id: id, result: ["error": "缺少 text"])
+            return
+        }
+        let ok = LocalStore.write(text)
+        if ok { LocalStore.ensureFinderVisible() }
+        respond(id: id, result: ok ? ["ok": true] : ["error": "写入失败"])
+    }
+
+    /// JS 调试用：拿到 App 沙盒下文件的真实路径（提示用户）。
+    private func handleDataPath(id: String) {
+        let path = LocalStore.dataFileURL().path
+        respond(id: id, result: ["path": path])
+    }
+
     // MARK: - 离线 OCR（Vision，全程本机，支持中文）
 
     private func handleOCR(id: String, payload: [String: Any]) {
@@ -126,7 +167,8 @@ class ViewController: UIViewController,
             respond(id: id, result: ["error": "缺少 base64"])
             return
         }
-        OfflineOCR.recognize(base64: b64) { text in
+        // 让 Swift 端做裁切：去掉顶部/底部各 8%，减少页眉页脚、侧边栏噪声
+        OfflineOCR.recognize(base64: b64, cropHeaderPct: 0.08, cropFooterPct: 0.08) { text in
             self.respond(id: id, result: ["text": text ?? ""])
         }
     }

@@ -3,7 +3,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>我的搜题平台</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='5' fill='%232563eb'/%3E%3Ccircle cx='10' cy='10' r='4.2' fill='none' stroke='%23fff' stroke-width='2'/%3E%3Cline x1='13.2' y1='13.2' x2='17' y2='17' stroke='%23fff' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E">
 <style>
@@ -2272,12 +2272,47 @@ function renderOcrUI(area,b64,text,file,origW,origH){
   const hasOCR=ocrEngine()!=="none";
   const engineName=ocrEngine()==="tesseract"?"本地识别(Tesseract.js)":(ocrEngine()==="ocrspace"?"在线接口(OCR.space等)":"手动粘贴");
   const sizeInfo=(origW&&origH)?(' <span class="muted" style="font-weight:400">原图 '+origW+'×'+origH+'，点击图片可放大查看 · 当前引擎：'+engineName+'</span>'):('');
+  const nativeToggle = (function(){
+    if (!(window.__SB && window.__SB.native && window.__SB.__lastOCR)) return "";
+    const last = window.__SB.__lastOCR;
+    if (!last || !last.stem) return "";
+    const useStem = last.mode === "stem";
+    return '<div id="ocrNativeToggle" style="display:flex;align-items:center;gap:8px;margin:8px 0 6px;font-size:13px;color:var(--sub);flex-wrap:wrap;">' +
+      '<b style="color:var(--ink)">显示：</b>' +
+      '<button type="button" class="btn '+(useStem?'pri':'')+'" data-mode="stem" style="padding:6px 10px;font-size:13px;">自动提炼题干</button>' +
+      '<button type="button" class="btn '+(!useStem?'pri':'')+'" data-mode="raw" style="padding:6px 10px;font-size:13px;">识别全文（保留页面噪声）</button>' +
+      '<span class="muted">默认用提炼版搜题</span>' +
+      '</div>';
+  })();
+  const taText = (window.__SB && window.__SB.native && window.__SB.__lastOCR && window.__SB.__lastOCR.stem)
+    ? ((window.__SB.__lastOCR.mode === "raw") ? window.__SB.__lastOCR.raw : window.__SB.__lastOCR.stem)
+    : text;
   area.innerHTML='<img class="imgprev" src="'+b64+'" alt="题目图片">'+(sizeInfo?'<div class="muted" style="font-size:13px;margin:-6px 0 8px;">'+sizeInfo+'</div>':'')
-    +'<div class="field" style="margin-top:10px"><label>识别出的文字（自动 OCR 或手动粘贴）</label><textarea id="ocrText" placeholder="在此粘贴/编辑图片中的题目文字…">'+esc(text)+'</textarea></div>'
+    + nativeToggle
+    +'<div class="field" style="margin-top:10px"><label>识别出的文字（自动 OCR 或手动粘贴）</label><textarea id="ocrText" placeholder="在此粘贴/编辑图片中的题目文字…">'+esc(taText)+'</textarea></div>'
     +'<div class="row"><button class="btn pri" id="ocrSearch">识别并搜题</button>'
     +(hasOCR?'<button class="btn" id="ocrRetry">重新识别</button>':'<button class="btn" id="ocrCfg">配置 OCR（设置里选引擎）</button>')
     +'<button class="btn" id="ocrSave">存为待识别图片</button></div>'
     +'<div id="ocrRes"></div>';
+  // 原生 App：切换"提炼 / 全文"
+  if (window.__SB && window.__SB.native && window.__SB.__lastOCR && window.__SB.__lastOCR.stem) {
+    const wrap = area.querySelector("#ocrNativeToggle");
+    if (wrap) {
+      wrap.addEventListener("click", function (ev) {
+        const btn = ev.target.closest && ev.target.closest("button[data-mode]");
+        if (!btn) return;
+        const last = window.__SB.__lastOCR;
+        const mode = btn.getAttribute("data-mode");
+        last.mode = mode;
+        const ta = $("#ocrText");
+        if (ta) ta.value = mode === "stem" ? (last.stem || last.raw) : last.raw;
+        wrap.querySelectorAll("button[data-mode]").forEach(function (b) {
+          if (b.getAttribute("data-mode") === mode) b.classList.add("pri");
+          else b.classList.remove("pri");
+        });
+      });
+    }
+  }
   // 点击图片放大查看
   const imgEl=area.querySelector(".imgprev");
   if(imgEl){
