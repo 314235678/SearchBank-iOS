@@ -296,18 +296,15 @@
     return false;
   }
 
-  // 题面"末尾"标志（用于识别题面在哪一行结束，起点找 ABCD 选项）
-  var STEM_END_TAIL = /[）\)]\s*[、。.,]?\s*$|[?？]\s*$/;
-  // 题干关键词（题面开头候选）
-  var STEM_TRIG = /(下列|关于|请|以下|哪一?|不属|不属于|属于|说法|表述|指出|根据|依据|符合)/;
-  // "16、"/"16." 题号
-  var STEM_NUM  = /^\s*\d{1,3}\s*[、.]\s*\S/;
-  // 选项正则（宽松：A./A、 / A：）
-  var OPTION_RE = /^\s*[A-Da-d]\s*[.、:：]\s*\S|^[A-Da-d]\s+[^\s]/;
-  // 题面+（）/（）结尾短行（针对判断题"（）"题面）
-  var PARENTH_BLANK = /[（(]\s*[）)]\s*$/;
-  // 问号/中文问号（题面可能含"？"）
-  var QMARK = /[?？]/;
+  // 注意：以下正则表达式已全部**直接内联使用**，不要命名为 var 引用并跨闭包使用。
+  // iOS WKWebView（JSC）在某些页面对 IIFE 内的 var 声明存在 TDZ 优化，
+  // 会抛 "Can't find variable: QMARK / STEM_TRIG / STEM_NUM" 之类的报错。全部内联即可规避。
+  // 1) 问号/中文问号            → /[?？]/
+  // 2) 题面末尾括号/问号/句号   → /[）\)]\s*[、。.,]?\s*$|[?？]\s*$/
+  // 3) 题干关键词               → /(下列|关于|请|以下|哪一?|不属|不属于|属于|说法|表述|指出|根据|依据|符合)/
+  // 4) 题号 "16、"/"16."         → /^\s*\d{1,3}\s*[、.]\s*\S/
+  // 5) 选项起始（A./A、/A:）     → /^\s*[A-Da-d]\s*[.、:：]\s*\S|^[A-Da-d]\s+[^\s]/
+  // 6) 括号空位（（）结尾）      → /[（(]\s*[）)]\s*$/
 
   /**
    * 把识别结果处理成"更适合搜题"的文本。
@@ -346,7 +343,7 @@
     // 找出所有"选项起点"位置：以 A./B./C./D. 开头
     var optionIdx = [];
     for (var oi = 0; oi < cleaned.length; oi++) {
-      if (OPTION_RE.test(cleaned[oi])) optionIdx.push(oi);
+      if (/^\s*[A-Da-d]\s*[.、:：]\s*\S|^[A-Da-d]\s+[^\s]/.test(cleaned[oi])) optionIdx.push(oi);
     }
     // 选项必须连续不间断，否则视为噪声跳过
     var firstOpt = optionIdx.length ? optionIdx[0] : -1;
@@ -370,7 +367,10 @@
       // 如果 firstOpt 之前的行含 "题干关键词" 或 "题号" 或以"（）结尾"，就取那一行；否则向前合并相邻的中文行
       for (var pi = firstOpt - 1; pi >= 0; pi--) {
         var prev = cleaned[pi];
-        if (STEM_TRIG.test(prev) || STEM_NUM.test(prev) || PARENTH_BLANK.test(prev) || /[。！？\?\)）]$/.test(prev)) {
+        if (/(下列|关于|请|以下|哪一?|不属|不属于|属于|说法|表述|指出|根据|依据|符合)/.test(prev) ||
+            /^\s*\d{1,3}\s*[、.]\s*\S/.test(prev) ||
+            /[（(]\s*[）)]\s*$/.test(prev) ||
+            /[。！？\?\)）]$/.test(prev)) {
           stemStart = pi;
           break;
         }
@@ -392,7 +392,9 @@
       var stemStart2 = -1;
       for (var k = 0; k < cleaned.length; k++) {
         var line = cleaned[k];
-        if (STEM_TRIG.test(line) || QMARK.test(line) || STEM_NUM.test(line)) {
+        if (/(下列|关于|请|以下|哪一?|不属|不属于|属于|说法|表述|指出|根据|依据|符合)/.test(line) ||
+            /[?？]/.test(line) ||
+            /^\s*\d{1,3}\s*[、.]\s*\S/.test(line)) {
           stemStart2 = k;
           break;
         }

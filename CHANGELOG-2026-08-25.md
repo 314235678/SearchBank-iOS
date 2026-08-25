@@ -3,7 +3,34 @@
 > 用户反馈的四个使用问题：① 关 App 数据丢失；② OCR 识别带噪声/不相关；③ 图标是占位纯蓝；④ 双指能拉大。
 > 全部已修，代码本地 commit `29ca9f5`；推到 GitHub 因 PAT 失效未果，用户在 Mac 或本地 git push 即可。
 
-## 6. v2.1（2026-08-25 15:40+）—— 适配做题界面 + App 内悬浮搜索
+## 7. v2.4（2026-08-25 19:00+）—— 五个 P0/P1 修复 + 计算器科学模式
+
+> 第二轮反馈：① 普通练习不记录；② 选项阴影位置乱跳；③ 左右滑跳题且滑久卡死；④ FAB 拍照报 `Can't find variable: QMARK`；⑤ 计算器要加科学模式。
+> 这一版五项全部处理；UI 整体重设计见 8。
+
+| 文件 | 改动 |
+| --- | --- |
+| `www/app-bridge.js` | **修 QMARK 报错**：把 IIFE 内的 `var STEM_TRIG / STEM_NUM / OPTION_RE / PARENTH_BLANK / QMARK` 全部**内联**到 `extractQuestionText()` 内。iOS WKWebView 的 JSC 引擎在某些页面上对闭包内 `var` 声明存在 TDZ 优化，会抛 "Can't find variable"。 |
+| `www/index.html` | **修普通练习不记录**：`exitSession()` 先调 `recordSession()`（之前只有模拟考试 timer 到点 / 主动交卷会触发 recordSession，普通练习中途按「退出」会丢数据）。`recordSession()` 加上"零结果不记录"防止空记录刷屏。 |
+| `www/index.html` | **修阴影位置错乱（搜索结果卡片选项）**：`optsHtml(opts, ans)` 接收答案参数，把 `answerLabels(it.a)` 解析出的 label 加 `.opt.correct` 类并打 `.opt-mark ✓`。CSS 加 `.opt.correct {border-color:var(--green); background:#ecfdf3}` 和 `.opt-mark`。同步改了 `renderOptsOrInline()` 把 `i.a` 透传。**结果：搜索结果卡 / 题库管理卡 / 浮窗答案卡**任何位置显示题目都对正确选项有绿色 ✓ 标识。 |
+| `www/index.html` | **修左右滑动跳题 + 卡死**：`bindBoost()` 在每次 `renderQuestion()` 都被调用，原本会**重复 append** `.play-fav / .play-top / .auto-next / .play-tools` 节点（DOM 无止境膨胀 → 卡死），并**重复 `addEventListener("touchstart/move/end")`** 到 `#trainPlay`，单次滑动 N 次 +1 → 跳到第 4+98 题。修：1) `bindBoost` 进入时 `card.querySelectorAll('[data-boost="1"]').forEach(remove)` 先清旧节点；2) 触摸事件移到 IIFE 顶层 **只绑一次**（用 `trainPlay.__swipeBound` 标志），并加 busy 自旋防止同一手势反复触发；3) 收藏按钮加 `favBusy` 防抖避免双击重入。 |
+| `www/index.html` | **科学计算器**：在 `#calcPanel` 头部加 `科学 / DEG` 两个切换按钮（`#calcMode / #calcAngle`），再加一行 `.calc-sci` 隐藏键盘（默认折叠，按"科学"展开）。新增按键 `sin/cos/tan/asin/acos/atan/ln/log/cbrt/xpow/10ˣ/inv/n!/ans/π/e/∛`。`toJS(toJSWithAngle)` 把 sin/cos/tan 按 `angleMode` 自动套度↔弧度；`factorial(n)` 做整数阶乘（n>170 防溢出）；`ans` 回填上一次等号结果；`isFinite` 判溢出；`evalExpr` 严格白名单杜绝任意 eval。重写后支持：`2+3*sqrt(2)`、`sin(30)`（DEG 默认 0.5）、`log(100)`、`5!` → 120、`ans` 复用、`π/4` 等。 |
+
+| `www/index.html` | **UI 重设计（v2.4 蓝紫商务风）**：参考截图，把 5 个 Tab 的结构、样式全面改写，旧 class 全部保留不破坏。 |
+| --- | --- |
+| 新增 `--pri2 / --pri3 / --pri4 / --amber2 / --gold / --grad-banner/blue/purple/orange/cyan/pink/green / --card-shadow / --big-radius` 等主题 token；新增 `.hero-banner / .entry-card / .shortcut-grid / .circle-progress / .data-card / .bank-tile / .qrow-modern / .records-week / .play-card.v2` 等新元素。 |
+| **主页**：顶部蓝色大渐变 banner（带 4 个 hero-stat + 描述）+ 两个大色块入口卡（顺序练习蓝/模拟考试紫）+ 8 格圆形入口图标网格（搜题/拍照/记录/练习/管理/导入/出卷/计算器）+ 4 个数据卡（已做/正确率/错题/收藏）+ 题库色块网格 + 最近练习列表。 |
+| **练习页**：顶部蓝色大 banner（左侧大圆环 SVG 显示完成进度 + 右侧 4 个统计数据）+ 顶部题库/题型筛选 + 3 个大色块入口（顺序/随机/模拟）+ 7 格快捷图标（背题/题型/错题/易错/计算器/记录/搜索）。 |
+| **搜索页**：顶部固定大搜索框（左侧搜索图标 + 右侧蓝色"搜索"按钮）+ chip 圆角筛选条（题库/题型/分类）+ "仅显示正确答案"复选框；结果卡片加 chip 标签：答案用绿底胶囊、题型用紫底胶囊。 |
+| **记录页**：顶部蓝色大 banner（今日练习/做题/正确率/错题/用时 5 项）+ 现代 7 天柱状图（今天高亮蓝）+ 紧凑行（左侧 0%/100% 圆环标识 + 题库/模式/时间 meta 行）。 |
+| **管理页**：题库色块化网格（点击直达搜索该题库）+ 题目管理顶部操作按钮突出；bank-list 的 `.bank-card` 替换为 `.bank-tile`，并支持单击进搜索。 |
+| **题目卡**：`.opt.correct` 绿色 ✓ 标识（修阴影位置 bug 的核心），`.opt-mark` 绝对定位到右上角。`.opt{position:relative}` 已加。 |
+| **新增交互**：`bindHomeV24()` 绑 entrySeq / entryExam / 8 格快捷入口；`quickLocate(id)` 从搜索结果卡片一键定位到练习并打开指定题号；`qRowModern()` 现代化的紧凑题行（管理页和首页共用）。 |
+| **副作用清理**：原本 `id="trainHome"` 内的旧 `<div class="mode-card">` 已删除，新结构用 `.entry-card.data-k + .shortcut-cell.mode-btn` 统一入口触发 `startSession()`。 |
+
+**校验方式（无需 Mac）**：浏览器直接打开 `www/index.html` 进首页试 5 个 bug 是否都消失；点计算器 → 「科学」展开新键盘。
+
+## 1. 数据持久化（解决"关闭软件后再打开导入的内容都没了"+"改题库名显示缓存已满"）
 
 | 文件 | 改动 |
 | --- | --- |

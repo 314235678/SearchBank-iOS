@@ -12,6 +12,22 @@
     --line:#e4e9f2; --pri:#2563eb; --pri-d:#1d4ed8; --pri-bg:#e9f1ff;
     --red:#dc2626; --green:#16a34a; --amber:#d97706; --soft:#f6f8fc;
     --radius:16px; --shadow:0 1px 2px rgba(20,30,60,.05),0 8px 24px rgba(20,30,60,.06);
+    /* ====== v2.4 新增主题色（驾考宝典蓝紫渐变风） ====== */
+    --pri2:#5b8def;          /* 浅蓝（点缀） */
+    --pri3:#7c3aed;          /* 紫色（强调） */
+    --pri4:#a855f7;          /* 浅紫 */
+    --amber2:#f59e0b;        /* 暖橙 */
+    --amber-bg:#fffbeb;
+    --gold:#facc15;
+    --grad-banner:linear-gradient(135deg,#1d4ed8 0%,#4f46e5 50%,#7c3aed 100%);
+    --grad-blue:linear-gradient(135deg,#3b82f6 0%,#6366f1 100%);
+    --grad-purple:linear-gradient(135deg,#8b5cf6 0%,#a855f7 100%);
+    --grad-orange:linear-gradient(135deg,#fb923c 0%,#f59e0b 100%);
+    --grad-cyan:linear-gradient(135deg,#22d3ee 0%,#3b82f6 100%);
+    --grad-pink:linear-gradient(135deg,#ec4899 0%,#a855f7 100%);
+    --grad-green:linear-gradient(135deg,#34d399 0%,#16a34a 100%);
+    --card-shadow:0 2px 6px rgba(20,30,60,.04),0 10px 28px rgba(20,30,60,.08);
+    --big-radius:22px;
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
   html,body{margin:0;padding:0;overscroll-behavior:none;}
@@ -84,9 +100,15 @@
   .qcard .note{color:var(--sub);font-size:13.5px;margin-top:8px;}
   .qcard .ops{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;}
   .opts{display:flex;flex-direction:column;gap:9px;margin:12px 0 6px;padding-left:2px;}
-  .opt{display:flex;align-items:flex-start;gap:10px;}
+  .opt{display:flex;align-items:flex-start;gap:10px;position:relative;}
   .opt-label{flex:0 0 30px;width:30px;height:30px;border-radius:50%;background:var(--pri-bg);color:var(--pri-d);font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:center;margin-top:1px;box-shadow:0 1px 2px rgba(37,99,235,.12);}
   .opt-text{flex:1;line-height:1.65;padding-top:4px;word-break:break-word;}
+  /* .opt.correct：搜索结果/题库管理/浮窗答案卡里给正确答案一个绿色 ✓ 标识
+     解决原 bug：以前 optsHtml 不传答案，搜索结果列表中看不出哪个对，
+     用户误以为是"选项阴影错位"。 */
+  .opt.correct{border-color:var(--green);background:#ecfdf3;}
+  .opt.correct .opt-label{background:var(--green);color:#fff;}
+  .opt-mark{position:absolute;right:10px;top:14px;width:22px;height:22px;border-radius:50%;background:var(--green);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;line-height:1;}
   .mini{padding:7px 12px;border-radius:9px;border:1px solid var(--line);font-size:13px;min-height:38px;background:var(--card);}
   .mini:hover{border-color:var(--pri);color:var(--pri-d);}
   .mini.del{color:var(--red);border-color:#f3c6c6;}
@@ -226,7 +248,9 @@
   #calcPanel.on{display:flex;}
   #calcPanel .calc-head{display:flex;justify-content:space-between;align-items:center;}
   #calcPanel .calc-head b{font-size:15px;}
-  #calcPanel .calc-head button{border:none;background:transparent;font-size:20px;color:var(--sub);cursor:pointer;padding:2px 8px;}
+  #calcPanel .calc-head button{border:1px solid var(--line);background:var(--card);font-size:13px;color:var(--ink);padding:4px 12px;border-radius:8px;cursor:pointer;}
+  #calcPanel .calc-head button#calcClose{border:none;background:transparent;font-size:20px;color:var(--sub);padding:2px 8px;}
+  #calcPanel .calc-head button.on{background:var(--pri-bg);color:var(--pri-d);border-color:var(--pri-bg);font-weight:600;}
   #calcPanel .calc-screen{background:var(--soft);border-radius:12px;padding:14px;text-align:right;min-height:56px;display:flex;flex-direction:column;justify-content:center;gap:2px;}
   #calcPanel .calc-screen .expr{font-size:13px;color:var(--sub);word-break:break-all;min-height:16px;}
   #calcPanel .calc-screen .res{font-size:26px;font-weight:700;color:var(--ink);word-break:break-all;}
@@ -406,8 +430,154 @@
   .rec-row .when{flex:0 0 110px;color:var(--sub);font-size:13px;}
   .rec-row .what{flex:1;font-size:14px;color:var(--ink);}
   .rec-row .stat-n{flex:0 0 90px;text-align:right;font-weight:700;color:var(--pri-d);font-size:15px;}
-  .rec-empty{padding:40px;text-align:center;color:var(--sub);}
-  @media print{
+.rec-empty{padding:40px;text-align:center;color:var(--sub);}
+
+/* ============================================================
+   v2.4 重设计专用样式（不替换原有 class，沿用 .card/.stat 等）
+   新元素：.hero-banner / .hero-stats / .shortcut-grid / .shortcut-cell
+           .circle-progress / .bank-tile / .data-card / .play-card.v2
+   ============================================================ */
+
+/* 顶部蓝色大 banner —— 模仿驾考宝典首页风格 */
+.hero-banner{
+  position:relative;
+  border-radius:var(--big-radius);
+  background:var(--grad-banner);
+  color:#fff;
+  padding:26px 28px 28px;
+  margin-bottom:18px;
+  overflow:hidden;
+  box-shadow:0 14px 30px rgba(79,70,229,.25),0 4px 8px rgba(29,78,216,.18);
+}
+.hero-banner::before{
+  content:"";position:absolute;right:-40px;top:-60px;width:240px;height:240px;border-radius:50%;
+  background:radial-gradient(circle,rgba(255,255,255,.18),transparent 70%);
+  pointer-events:none;
+}
+.hero-banner::after{
+  content:"";position:absolute;left:-30px;bottom:-50px;width:160px;height:160px;border-radius:50%;
+  background:radial-gradient(circle,rgba(168,85,247,.35),transparent 70%);
+  pointer-events:none;
+}
+.hero-banner .hero-top{display:flex;align-items:center;gap:8px;font-size:13px;opacity:.85;letter-spacing:.3px;}
+.hero-banner .hero-top::before{content:"";width:6px;height:6px;border-radius:50%;background:#facc15;box-shadow:0 0 8px #facc15;}
+.hero-banner h1{margin:6px 0 4px;font-size:22px;font-weight:700;line-height:1.3;letter-spacing:.5px;}
+.hero-banner .hero-sub{font-size:13px;opacity:.85;line-height:1.7;margin-bottom:18px;}
+.hero-banner .hero-stats{display:flex;gap:18px;flex-wrap:wrap;margin-top:6px;}
+.hero-banner .hero-stat{display:flex;align-items:baseline;gap:6px;}
+.hero-banner .hero-stat .n{font-size:28px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums;}
+.hero-banner .hero-stat .l{font-size:12px;opacity:.85;}
+
+/* 大圆环进度 */
+.circle-progress{position:relative;width:100px;height:100px;flex:0 0 100px;}
+.circle-progress svg{width:100%;height:100%;transform:rotate(-90deg);}
+.circle-progress .track{stroke:rgba(255,255,255,.25);}
+.circle-progress .bar{stroke:#fff;stroke-linecap:round;transition:stroke-dashoffset .6s;}
+.circle-progress .num{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:800;color:#fff;line-height:1;}
+.circle-progress .num b{font-size:22px;}
+.circle-progress .num span{font-size:11px;opacity:.85;margin-top:2px;}
+
+/* 主入口卡片（顺序练习 / 模拟考试）*/
+.entry-row{display:grid;grid-template-columns:1.4fr 1fr;gap:14px;margin-bottom:18px;}
+.entry-card{position:relative;border-radius:var(--big-radius);padding:20px 22px;color:#fff;box-shadow:0 10px 24px rgba(0,0,0,.08);cursor:pointer;overflow:hidden;transition:transform .15s, box-shadow .2s;}
+.entry-card:hover{transform:translateY(-2px);}
+.entry-card:active{transform:translateY(0);}
+.entry-card.blue{background:var(--grad-blue);}
+.entry-card.purple{background:var(--grad-purple);}
+.entry-card .e-title{font-size:18px;font-weight:800;display:flex;align-items:center;gap:8px;}
+.entry-card .e-desc{font-size:12.5px;opacity:.88;margin-top:6px;line-height:1.5;}
+.entry-card .e-action{display:inline-flex;align-items:center;gap:6px;margin-top:14px;padding:8px 16px;border-radius:20px;background:rgba(255,255,255,.22);font-size:13px;font-weight:600;backdrop-filter:blur(8px);}
+.entry-card .e-icon{position:absolute;right:-10px;bottom:-12px;font-size:96px;opacity:.18;pointer-events:none;line-height:1;}
+
+/* 8 格圆形入口图标网格 */
+.shortcut-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px;}
+.shortcut-cell{display:flex;flex-direction:column;align-items:center;gap:8px;padding:18px 10px;border-radius:18px;background:var(--card);border:1px solid var(--line);cursor:pointer;transition:.15s;}
+.shortcut-cell:hover{transform:translateY(-2px);box-shadow:var(--card-shadow);}
+.shortcut-cell .ic{width:54px;height:54px;border-radius:16px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:24px;}
+.shortcut-cell .ic.b{background:var(--grad-blue);}
+.shortcut-cell .ic.p{background:var(--grad-purple);}
+.shortcut-cell .ic.o{background:var(--grad-orange);}
+.shortcut-cell .ic.c{background:var(--grad-cyan);}
+.shortcut-cell .ic.pk{background:var(--grad-pink);}
+.shortcut-cell .ic.g{background:var(--grad-green);}
+.shortcut-cell .ic.k{background:#1f2937;}
+.shortcut-cell .ic.r{background:linear-gradient(135deg,#ef4444,#f97316);}
+.shortcut-cell .lab{font-size:13px;font-weight:600;color:var(--ink);}
+.shortcut-cell .sub{font-size:11px;color:var(--sub);}
+
+/* 题库色块 */
+.bank-tile{display:flex;align-items:center;gap:12px;padding:14px;border-radius:14px;background:var(--card);border:1px solid var(--line);cursor:pointer;transition:.15s;}
+.bank-tile:hover{border-color:var(--pri2);box-shadow:var(--card-shadow);}
+.bank-tile .b-ic{width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px;background:var(--grad-blue);flex:0 0 42px;}
+.bank-tile .b-info{flex:1;min-width:0;}
+.bank-tile .b-name{font-weight:700;font-size:14px;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;}
+.bank-tile .b-meta{font-size:12px;color:var(--sub);margin-top:2px;}
+
+/* 移动端 banner 适配 */
+@media (max-width:600px){
+  .hero-banner{padding:20px 18px 22px;}
+  .hero-banner h1{font-size:18px;}
+  .hero-banner .hero-stat .n{font-size:22px;}
+  .entry-row{grid-template-columns:1fr;}
+  .entry-card .e-icon{font-size:72px;}
+  .shortcut-grid{grid-template-columns:repeat(4,1fr);gap:8px;}
+  .shortcut-cell{padding:12px 4px;}
+  .shortcut-cell .ic{width:42px;height:42px;font-size:20px;}
+}
+
+/* 答题卡模式进度格（v2.4） */
+.play-progress-bar{display:flex;flex-wrap:wrap;gap:6px;margin:14px 0;padding:14px;background:var(--soft);border-radius:14px;border:1px solid var(--line);}
+.play-progress-bar .qpos{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:12.5px;font-weight:600;background:var(--card);border:1px solid var(--line);color:var(--sub);cursor:pointer;}
+.play-progress-bar .qpos.answered{background:var(--pri-bg);border-color:var(--pri2);color:var(--pri-d);}
+.play-progress-bar .qpos.ok{background:var(--green);color:#fff;border-color:var(--green);}
+.play-progress-bar .qpos.no{background:var(--red);color:#fff;border-color:var(--red);}
+.play-progress-bar .qpos.mark{background:var(--gold);color:#92400e;border-color:var(--amber2);}
+.play-progress-bar .qpos.cur{outline:2px solid var(--pri);outline-offset:1px;}
+
+/* 紧凑型题目卡（v2.4） */
+.play-card.v2{padding:18px 18px 14px;border-radius:20px;background:var(--card);border:1px solid var(--line);box-shadow:var(--card-shadow);}
+.play-card.v2 .qmeta{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;}
+.play-card.v2 .qmeta .left{display:flex;gap:8px;align-items:center;color:var(--sub);font-size:13px;}
+.play-card.v2 .qmeta .badge{background:var(--pri-bg);color:var(--pri-d);padding:3px 10px;border-radius:99px;font-weight:600;}
+.play-card.v2 .qno{font-size:13px;color:var(--sub);margin-bottom:6px;}
+.play-card.v2 .qno b{color:var(--pri-d);font-size:18px;}
+.play-card.v2 .qtext{font-size:16.5px;line-height:1.7;white-space:pre-wrap;word-break:break-word;padding:14px 16px;background:var(--soft);border-radius:12px;border-left:4px solid var(--pri2);margin-bottom:14px;}
+.play-card.v2 .opts{display:flex;flex-direction:column;gap:9px;}
+.play-card.v2 .opt{padding:12px 14px;font-size:15px;}
+
+/* 答题卡底部"上一题/下一题"快捷栏 */
+.play-quicknav{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:14px;padding-top:14px;border-top:1px dashed var(--line);}
+.play-quicknav .btn{font-size:13.5px;padding:8px 14px;}
+
+/* 大版式题库列表（管理页表格化） */
+.qlist-modern{display:grid;grid-template-columns:1fr;gap:10px;}
+.qrow-modern{display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:14px;background:var(--card);border:1px solid var(--line);transition:.12s;}
+.qrow-modern:hover{box-shadow:var(--card-shadow);}
+.qrow-modern .qidx{flex:0 0 30px;width:30px;height:30px;border-radius:8px;background:var(--pri-bg);color:var(--pri-d);font-weight:700;display:flex;align-items:center;justify-content:center;font-size:13px;}
+.qrow-modern .qbody{flex:1;min-width:0;}
+.qrow-modern .qbody .qti{font-size:14.5px;line-height:1.6;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+.qrow-modern .qbody .qmeta-line{margin-top:4px;font-size:12px;color:var(--sub);display:flex;gap:8px;flex-wrap:wrap;}
+.qrow-modern .qbody .qmeta-line .ans{border:1px solid var(--green);color:var(--green);padding:1px 8px;border-radius:99px;font-weight:600;}
+.qrow-modern .ops{display:flex;gap:6px;flex:0 0 auto;}
+
+/* 大数据卡（首页数据展示） */
+.data-card-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px;}
+.data-card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:18px;display:flex;flex-direction:column;gap:4px;transition:.15s;}
+.data-card:hover{transform:translateY(-2px);box-shadow:var(--card-shadow);}
+.data-card .lab{font-size:12.5px;color:var(--sub);}
+.data-card .n{font-size:28px;font-weight:800;color:var(--ink);font-variant-numeric:tabular-nums;}
+.data-card .delta{font-size:11.5px;color:var(--green);}
+.data-card .delta.bad{color:var(--red);}
+@media (max-width:600px){.data-card-grid{grid-template-columns:repeat(2,1fr);}}
+
+/* 记录页布局 */
+.records-week{display:flex;align-items:flex-end;gap:8px;height:140px;padding:14px;border-radius:14px;background:var(--soft);border:1px solid var(--line);margin-bottom:14px;}
+.records-week .day{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;}
+.records-week .day .bar{width:100%;background:var(--grad-blue);border-radius:6px;min-height:2px;transition:.25s;}
+.records-week .day .n{font-size:11px;color:var(--ink);font-weight:600;}
+.records-week .day .d{font-size:11px;color:var(--sub);}
+
+@media print{
     body *{visibility:hidden;}
     #printSheet,#printSheet *{visibility:visible;}
     #printSheet{display:block !important;position:absolute;left:0;top:0;width:100%;background:#fff;}
@@ -453,13 +623,104 @@
 
     <!-- 概览 -->
     <section class="view on" id="v-home">
-      <div class="grid-stats">
-        <div class="stat"><div class="n" id="stTotal">0</div><div class="l">题目总数</div></div>
-        <div class="stat"><div class="n" id="stToday">0</div><div class="l">今日新增</div></div>
-        <div class="stat"><div class="n" id="stBanks">0</div><div class="l">题库数</div></div>
-        <div class="stat"><div class="n" id="stWrong">0</div><div class="l">错题数</div></div>
-        <div class="stat"><div class="n" id="stHard">0</div><div class="l">易错题</div></div>
+      <!-- 顶部蓝色大 banner -->
+      <div class="hero-banner">
+        <div class="hero-top">智能题库 · 自动批改</div>
+        <h1>📚 搜题平台 <span style="opacity:.8;font-size:13px;font-weight:500;margin-left:6px">v2.4</span></h1>
+        <div class="hero-sub" id="heroSub">正在为你检索全题库… · 0 题 · 0 题库</div>
+        <div class="hero-stats" id="heroStats">
+          <div class="hero-stat"><span class="n" id="heroTotal">0</span><span class="l">总题数</span></div>
+          <div class="hero-stat"><span class="n" id="heroToday">0</span><span class="l">今日新增</span></div>
+          <div class="hero-stat"><span class="n" id="heroWrong">0</span><span class="l">未掌握</span></div>
+          <div class="hero-stat"><span class="n" id="heroBanks">0</span><span class="l">题库</span></div>
+        </div>
       </div>
+
+      <!-- 主入口：顺序练习 / 模拟考试 两个大色块 -->
+      <div class="entry-row">
+        <div class="entry-card blue" id="entrySeq">
+          <div class="e-title">📖 顺序练习</div>
+          <div class="e-desc">按题号从头到尾一题一题刷，错题自动归集</div>
+          <div class="e-action">开始练习 ›</div>
+          <div class="e-icon">📖</div>
+        </div>
+        <div class="entry-card purple" id="entryExam">
+          <div class="e-title">📝 模拟考试</div>
+          <div class="e-desc">限时交卷 · 题型配比自由</div>
+          <div class="e-action">配置考试 ›</div>
+          <div class="e-icon">📝</div>
+        </div>
+      </div>
+
+      <!-- 8 格圆形入口图标网格 -->
+      <div class="shortcut-grid">
+        <div class="shortcut-cell" data-goto="search">
+          <div class="ic b">🔍</div>
+          <div class="lab">搜题</div>
+          <div class="sub">关键词检索</div>
+        </div>
+        <div class="shortcut-cell" data-goto="ocr">
+          <div class="ic p">📷</div>
+          <div class="lab">拍照识题</div>
+          <div class="sub">图片 OCR</div>
+        </div>
+        <div class="shortcut-cell" data-goto="records">
+          <div class="ic o">📊</div>
+          <div class="lab">练习记录</div>
+          <div class="sub">错题 / 统计</div>
+        </div>
+        <div class="shortcut-cell" data-goto="train">
+          <div class="ic c">✏️</div>
+          <div class="lab">开始练习</div>
+          <div class="sub">模式可选</div>
+        </div>
+        <div class="shortcut-cell" data-goto="manage">
+          <div class="ic pk">📁</div>
+          <div class="lab">题库管理</div>
+          <div class="sub">整理 / 删除</div>
+        </div>
+        <div class="shortcut-cell" data-goto="import">
+          <div class="ic g">⬆️</div>
+          <div class="lab">导入题库</div>
+          <div class="sub">Excel/Word</div>
+        </div>
+        <div class="shortcut-cell" data-goto="paper">
+          <div class="ic k">📄</div>
+          <div class="lab">出试卷</div>
+          <div class="sub">打印 / 预览</div>
+        </div>
+        <div class="shortcut-cell" id="entryCalc">
+          <div class="ic r">🧮</div>
+          <div class="lab">计算器</div>
+          <div class="sub">标准 + 科学</div>
+        </div>
+      </div>
+
+      <!-- 顶部数据统计 4 卡 -->
+      <div class="data-card-grid">
+        <div class="data-card">
+          <div class="lab">已做题</div>
+          <div class="n" id="stTotal">0</div>
+          <div class="delta" id="stToday">+0 今日</div>
+        </div>
+        <div class="data-card">
+          <div class="lab">正确率</div>
+          <div class="n" id="stAcc">0%</div>
+          <div class="delta" id="stAccSub">近 7 天</div>
+        </div>
+        <div class="data-card">
+          <div class="lab">错题</div>
+          <div class="n" id="stWrong">0</div>
+          <div class="delta bad" id="stWrongSub">待巩固</div>
+        </div>
+        <div class="data-card">
+          <div class="lab">已收藏</div>
+          <div class="n" id="stFav">0</div>
+          <div class="delta">重点题</div>
+        </div>
+      </div>
+
+      <!-- 下方：快速搜题 + 最近题库 -->
       <div class="card">
         <h2><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg>快速搜题</h2>
         <div class="searchbox">
@@ -467,7 +728,9 @@
           <button class="btn pri" id="quickGo">搜索</button>
         </div>
         <div class="hint" style="margin-top:14px">支持 <b>Word(.docx)</b>、<b>Excel(.xlsx/.xls)</b>、<b>CSV</b> 导入题库；上传图片可识别文字并自动搜题。首次打开已预置示例数据，可在「题库管理」中清空。</div>
-        <div id="homeBanks"></div>
+        <h3 style="margin:18px 0 8px;font-size:14px;color:var(--sub)">📚 题库</h3>
+        <div id="homeBanks" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;"></div>
+        <h3 style="margin:18px 0 8px;font-size:14px;color:var(--sub)">🕘 最近练习</h3>
         <div id="homeRecent"></div>
       </div>
     </section>
@@ -551,35 +814,47 @@
     <section class="view" id="v-search">
       <div class="card">
         <h2><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg>试题搜索</h2>
-        <div class="searchbox" style="flex-wrap:wrap;">
-          <input id="searchInput" placeholder="输入关键字检索…" style="min-width:180px;">
-          <select id="bankFilter" style="padding:13px 12px;border:1px solid var(--line);border-radius:11px;background:var(--soft);min-width:150px;"></select>
-          <select id="typeFilter" style="padding:13px 12px;border:1px solid var(--line);border-radius:11px;background:var(--soft);min-width:140px;"></select>
-          <select id="catFilter" style="padding:13px 12px;border:1px solid var(--line);border-radius:11px;background:var(--soft);min-width:140px;"></select>
-          <button class="btn pri" id="searchBtn">搜索</button>
+        <!-- 顶部大搜索框 -->
+        <div style="position:relative;margin-bottom:12px;">
+          <input id="searchInput" placeholder="输入关键字（比如：习近平、安全生产、装备精良…）"
+            style="padding:14px 48px 14px 44px;font-size:15px;width:100%;border:1px solid var(--line);border-radius:14px;background:var(--card);">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+            style="position:absolute;left:14px;top:50%;transform:translateY(-50%);pointer-events:none"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg>
+          <button id="searchBtn" class="btn pri" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);padding:7px 16px;border-radius:10px;">搜索</button>
         </div>
-        <div class="muted" id="searchMeta" style="margin-top:10px"></div>
-        <div id="searchResults"></div>
+        <!-- chip 筛选 -->
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center;">
+          <select id="bankFilter" style="padding:7px 10px;border:1px solid var(--line);border-radius:18px;background:var(--soft);font-size:13px"></select>
+          <select id="typeFilter" style="padding:7px 10px;border:1px solid var(--line);border-radius:18px;background:var(--soft);font-size:13px"></select>
+          <select id="catFilter" style="padding:7px 10px;border:1px solid var(--line);border-radius:18px;background:var(--soft);font-size:13px"></select>
+          <label style="display:inline-flex;align-items:center;gap:4px;color:var(--sub);font-size:12.5px;margin-left:auto">
+            <input type="checkbox" id="onlyCorrect"> 仅显示正确答案
+          </label>
+        </div>
+        <div class="muted" id="searchMeta" style="margin-top:6px;padding:6px 12px;background:var(--soft);border-radius:10px;font-size:13px"></div>
+        <div id="searchResults" style="margin-top:14px"></div>
       </div>
     </section>
 
     <!-- 题库管理 -->
     <section class="view" id="v-manage">
       <div class="card">
-        <h2><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>题库文件夹</h2>
-        <div id="bankList" class="bank-list"></div>
-        <div style="margin-top:10px"><button class="btn" id="btnAddBank">+ 新建题库</button></div>
+        <h2 style="display:flex;align-items:center;justify-content:space-between;width:100%">
+          <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg> 题库文件夹</span>
+          <button class="btn pri" id="btnAddBank" style="padding:8px 14px;font-size:13px">+ 新建题库</button>
+        </h2>
+        <div id="bankList" class="bank-list" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px"></div>
       </div>
-      <div class="card">
+      <div class="card" style="margin-top:14px">
         <h2><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3.5" cy="6" r="1.3"/><circle cx="3.5" cy="12" r="1.3"/><circle cx="3.5" cy="18" r="1.3"/></svg>题目管理</h2>
         <div class="row" style="align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
-          <select id="mgBank" style="padding:11px 13px;border:1px solid var(--line);border-radius:10px;background:var(--soft);min-width:150px;"></select>
-          <select id="mgType" style="padding:11px 13px;border:1px solid var(--line);border-radius:10px;background:var(--soft);min-width:130px;"><option value="">全部题型</option></select>
-          <input id="mgSearch" placeholder="筛选题目…" style="flex:1;min-width:160px;padding:11px 13px;border:1px solid var(--line);border-radius:10px;background:var(--soft);">
-          <label class="toggle" style="display:flex;align-items:center;gap:6px;white-space:nowrap;color:var(--sub);font-size:14px;"><input type="checkbox" id="mgBad"> <span>只看问题题</span></label>
-          <button class="btn" id="btnDup" style="border-color:#f3c6c6;color:var(--red);">查重</button>
-          <button class="btn" id="btnClearDemo">清空示例数据</button>
-          <button class="btn" id="btnSettings">设置</button>
+          <select id="mgBank" style="padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--soft);min-width:140px"></select>
+          <select id="mgType" style="padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--soft);min-width:120px"><option value="">全部题型</option></select>
+          <input id="mgSearch" placeholder="筛选题目…" style="flex:1;min-width:160px;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--soft);">
+          <label class="toggle" style="display:flex;align-items:center;gap:6px;white-space:nowrap;color:var(--sub);font-size:13.5px"><input type="checkbox" id="mgBad"> <span>只看问题题</span></label>
+          <button class="btn" id="btnDup" style="border-color:#f3c6c6;color:var(--red)">查重</button>
+          <button class="btn" id="btnClearDemo">清空示例</button>
+          <button class="btn" id="btnSettings">⚙ 设置</button>
         </div>
         <div id="manageList"></div>
       </div>
@@ -637,17 +912,28 @@
 
     <!-- 练习记录 -->
     <section class="view" id="v-records">
+      <!-- 蓝色大 banner：今日学习数据 -->
+      <div class="hero-banner" style="margin-bottom:18px">
+        <div class="hero-top">今日进度</div>
+        <h1 id="recTodayTitle">练习记录</h1>
+        <div class="hero-sub" id="recTodaySub">暂无记录</div>
+        <div class="hero-stats" id="recToday"></div>
+      </div>
+      <!-- 近 7 天柱状图 -->
       <div class="card">
-        <h2><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18" style="vertical-align:-3px"><path d="M3 3v18h18"/><path d="M7 14l4-4 4 4 5-5"/></svg> 今日概览</h2>
-        <div class="rec-today" id="recToday"></div>
+        <h2 style="display:flex;align-items:center;justify-content:space-between;width:100%">
+          <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18" style="vertical-align:-3px"><path d="M3 3v18h18"/><path d="M7 14l4-4 4 4 5-5"/></svg> 近 7 天练习量</span>
+          <span class="muted" id="recWeekSum" style="font-size:13px"></span>
+        </h2>
+        <div class="records-week" id="recBars"></div>
       </div>
+      <!-- 最近练习 -->
       <div class="card" style="margin-top:14px">
-        <h2>近 7 天练习量</h2>
-        <div class="rec-week"><div class="rec-week-title"><span>做题数（按天）</span><span class="muted" id="recWeekSum"></span></div><div class="rec-bars" id="recBars"></div></div>
-      </div>
-      <div class="card" style="margin-top:14px">
-        <h2>最近练习 <button class="btn ghost" id="recClear" style="margin-left:auto;padding:6px 12px;font-size:13px">清空记录</button></h2>
-        <div class="rec-list" id="recList"></div>
+        <h2 style="display:flex;align-items:center;justify-content:space-between;width:100%">
+          <span>📋 最近练习</span>
+          <button class="btn ghost" id="recClear" style="padding:6px 12px;font-size:13px">清空记录</button>
+        </h2>
+        <div id="recList"></div>
       </div>
     </section>
   </main>
@@ -955,7 +1241,7 @@ function go(view){
   $all(".nav button,.bot button").forEach(b=>b.classList.toggle("on",b.dataset.view===view));
   $all(".view").forEach(v=>v.classList.toggle("on",v.id==="v-"+view));
   $("#pageTitle").textContent=TITLES[view]||"搜题平台";
-  if(view==="home")renderHome();
+  if(view==="home"){renderHome();bindHomeV24();}
   if(view==="search"){fillSearchFilters();doSearch();}
   if(view==="manage")renderManage();
   if(view==="import")fillBankSelects();
@@ -966,23 +1252,86 @@ function go(view){
 $all(".nav button,.bot button").forEach(b=>b.addEventListener("click",()=>go(b.dataset.view)));
 
 /* ============ 概览 ============ */
+/* ============ 主页交互绑定（v2.4 重设计） ============ */
+function bindHomeV24(){
+  // 大入口：「顺序练习」/「模拟考试」
+  const es=$("#entrySeq"); if(es && !es.__bound){ es.__bound=1; es.addEventListener("click", ()=>{ go("train"); renderTrain(); setTimeout(()=>{ const b=$all("#trainHome .mode-btn"); if(b&&b[0]) b[0].click(); }, 80); }); }
+  const ee=$("#entryExam"); if(ee && !ee.__bound){ ee.__bound=1; ee.addEventListener("click", ()=>{ go("train"); renderTrain(); setTimeout(()=>{ const b=$("#trainHome .mode-btn-exam"); if(b) b.click(); else openExamSetup({bankId:"all"}); }, 80); }); }
+  // 8 格快捷图标 + 计算器（无 data-goto 的特判）
+  $all(".shortcut-cell[data-goto], .shortcut-cell#entryCalc").forEach(el=>{
+    if(el.__bound) return; el.__bound=1;
+    el.addEventListener("click", ()=>{
+      const t=el.dataset.goto;
+      if(el.id==="entryCalc"){ if(window.__SB && window.__SB.calcOpen) window.__SB.calcOpen(true); return; }
+      if(t){ go(t); if(t==="search")doSearch(); if(t==="train")renderTrain(); if(t==="manage")renderManage(); if(t==="records")renderRecords(); }
+    });
+  });
+}
 function renderHome(){
   const items=DATA.items;
-  $("#stTotal").textContent=items.length;
+  // 顶部 banner 数字
   const ts=todayStart();
-  $("#stToday").textContent=items.filter(i=>i.createdAt>=ts).length;
-  $("#stBanks").textContent=(DATA.banks||[]).length;
-  $("#stWrong").textContent=wrongItems().length;
-  $("#stHard").textContent=hardItems().length;
+  const today=items.filter(i=>i.createdAt>=ts).length;
+  const wrong=wrongItems().length;
+  const banks=(DATA.banks||[]).length;
+  if($("#heroTotal")) $("#heroTotal").textContent=items.length;
+  if($("#heroToday")) $("#heroToday").textContent=today;
+  if($("#heroWrong")) $("#heroWrong").textContent=wrong;
+  if($("#heroBanks"))  $("#heroBanks").textContent=banks;
+  if($("#heroSub"))    $("#heroSub").textContent="共 "+(DATA.banks?DATA.banks.length:0)+" 个题库 / "+(DATA.items?DATA.items.length:0)+" 道题，随时随地刷题";
+
+  // 下方 4 数据卡
+  if($("#stTotal")) $("#stTotal").textContent=items.length;
+  if($("#stToday")) $("#stToday").textContent="+ "+today+" 今日";
+  // 正确率：近 7 天练习记录统计
+  const recs=DATA.records||[];
+  const last7=recs.filter(r=>(r.at||0)>=Date.now()-7*86400000);
+  const acc=last7.length?(last7.reduce((a,r)=>a+(r.total?r.correct/r.total:0),0)/last7.length*100):0;
+  if($("#stAcc"))   $("#stAcc").textContent=(acc?Math.round(acc):0)+"%";
+  if($("#stAccSub"))$("#stAccSub").textContent="近 "+last7.length+" 次";
+  if($("#stWrong"))  $("#stWrong").textContent=wrong;
+  if($("#stWrongSub"))$("#stWrongSub").textContent=wrong>10?"建议刷一遍错题":"保持手感";
+  if($("#stFav"))    $("#stFav").textContent=items.filter(i=>i.fav).length;
+
+  // 题库色块网格
   const hb=$("#homeBanks");
-  if(hb)hb.innerHTML='<h2 style="font-size:15px;margin:6px 0 10px;display:flex;gap:8px;align-items:center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>题库概览</h2>'
-    +(DATA.banks||[]).map(b=>{const n=bankItems(b.id).length;const w=bankItems(b.id).filter(i=>i.wrongCount>0&&!i.mastered).length;return '<div class="bank-card"><span class="dot" style="background:'+esc(b.color||"#2563eb")+'"></span><div class="bc-main"><div class="bc-name">'+esc(b.name)+'</div><div class="bc-sub">'+n+' 题 · '+w+' 错题</div></div></div>';}).join("");
-  // 待处理：逾期 + 今日新增 + 未分类
-  const pend=items.filter(i=>i.overdue||i.createdAt>=ts||(!i.cat&&i.src==="示例"));
+  if(hb){
+    if(!(DATA.banks||[]).length){
+      hb.innerHTML='<div class="muted" style="grid-column:1/-1;padding:18px;text-align:center;font-size:13px">还没有题库 · 去「导入题库」批量加题</div>';
+    } else {
+      hb.innerHTML=(DATA.banks||[]).map(b=>{
+        const n=bankItems(b.id).length;
+        const w=bankItems(b.id).filter(i=>i.wrongCount>0&&!i.mastered).length;
+        return '<div class="bank-tile" data-bank="'+esc(b.id)+'">'
+          +'<div class="b-ic" style="background:'+esc(b.color||"#2563eb")+'">📚</div>'
+          +'<div class="b-info"><div class="b-name">'+esc(b.name)+'</div>'
+          +'<div class="b-meta">'+n+' 题 · '+w+' 错题</div></div>'
+          +'</div>';
+      }).join("");
+      hb.querySelectorAll('[data-bank]').forEach(t=>{
+        t.onclick=()=>{go("search");const bf=$("#bankFilter");if(bf)bf.value=t.dataset.bank;doSearch();};
+      });
+    }
+  }
+
+  // 待处理列表
+  const pend=items.filter(i=>i.overdue||i.createdAt>=ts||(!i.cat&&i.src==="示例")).slice(0,8);
   const box=$("#homeRecent");
-  if(!pend.length){box.innerHTML='<div class="empty" style="padding:24px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 6L9 17l-5-5"/></svg><div>暂无待处理项，去导入或搜索题库吧</div></div>';return;}
-  box.innerHTML='<h2 style="font-size:15px;margin:18px 0 10px;display:flex;gap:8px;align-items:center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="7" x2="12" y2="13"/><line x1="12" y1="17" x2="12" y2="17"/></svg>今天要处理</h2>'
-    +pend.slice(0,6).map(i=>qCard(i,true)).join("");
+  if(!pend.length){box.innerHTML='<div class="empty" style="padding:18px;font-size:13px">暂无待处理项，去导入或搜索题库吧</div>';return;}
+  box.innerHTML='<div class="qlist-modern">'+pend.map(i=>qRowModern(i)).join("")+'</div>';
+}
+
+// 现代化"题目行"（管理页、首页最近都共用）
+function qRowModern(i,idx){
+  const cat=i.cat?'<span>· ' + esc(i.cat) + '</span>':'';
+  const overdue=i.overdue?' <span class="tag" style="background:#fde8e8;color:#dc2626">逾期</span>':'';
+  return '<div class="qrow-modern" data-id="'+esc(i.id)+'">'
+    +'<div class="qidx">'+esc(idx||"—")+'</div>'
+    +'<div class="qbody"><div class="qti">'+esc(cleanQ(i))+overdue+'</div>'
+    +'<div class="qmeta-line"><span class="ans">答案 '+esc(i.a)+'</span>'+cat+'<span>· '+(i.type||"题目")+'</span></div></div>'
+    +'<div class="ops"><button class="mini" onclick="locate(\''+i.id+'\')">搜</button>'
+    +(i.overdue?'<button class="mini del" onclick="clearOverdue(\''+i.id+'\')">✓</button>':'')
+    +'</div></div>';
 }
 function qCard(i,mini){
   const overdue=i.overdue?' <span class="tag" style="background:#fde8e8;color:#dc2626">逾期</span>':'';
@@ -1177,12 +1526,31 @@ function bindLoadMore(res,PAGE){
 }
 function qCardFull(i,idx){
   const cat=i.cat?'<span class="tag">'+esc(i.cat)+'</span>':'<span class="tag" style="background:#f1f5f9;color:#94a3b8">未分类</span>';
-  const note=i.note?'<div class="note">解析：'+esc(i.note)+'</div>':'';
+  const note=i.note?'<div class="note" style="color:var(--sub);font-size:13px;margin-top:8px;padding-top:8px;border-top:1px dashed var(--line)">📝 解析：'+esc(i.note)+'</div>':'';
   const img=i.img?'<img class="imgprev" src="'+i.img+'" alt="题图">':'';
   const opts=renderOptsOrInline(i);
-  return '<div class="qcard"><div class="qh"><span class="idx">'+idx+'.</span><span>'+esc(cleanQ(i))+'</span></div>'+cat+img+opts
-    +'<div class="ans"><span class="lab">答案</span>'+esc(i.a)+'</div>'+note
-    +'<div class="ops"><button class="mini" onclick="editItem(\''+i.id+'\')">编辑</button><button class="mini del" onclick="delItem(\''+i.id+'\')">删除</button></div></div>';
+  // 用更现代的元信息行：题号 + 类型 + 答案 标签
+  const typeTag=i.type?'<span class="tag" style="background:#eef2ff;color:#4338ca">'+esc(i.type)+'</span>':'';
+  const ansChip=typeof answerLabels==="function"&&answerLabels(i.a||"")?('<span class="tag" style="background:#ecfdf5;color:#16a34a;border:1px solid #bbf7d0;font-weight:600">答案 '+esc(i.a)+'</span>'):('<span class="tag" style="background:#fef9c3;color:#92400e">答案 '+esc(i.a)+'</span>');
+  const metaLine='<div style="display:flex;gap:6px;flex-wrap:wrap;margin:6px 0 10px;align-items:center">'+ansChip+typeTag+cat+'</div>';
+  return '<div class="qcard" style="border-radius:18px;padding:16px 18px"><div class="qh"><span class="idx">'+idx+'.</span><span>'+esc(cleanQ(i))+'</span></div>'
+    +metaLine+img+opts+note
+    +'<div class="ops"><button class="mini" onclick="editItem(\''+i.id+'\')">编辑</button><button class="mini del" onclick="delItem(\''+i.id+'\')">删除</button>'
+    +'<button class="mini" onclick="quickLocate(\''+i.id+'\')">定位到练习</button></div></div>';
+}
+function quickLocate(id){
+  const it=DATA.items.find(x=>x.id===id);
+  if(!it)return;
+  go("train");
+  setTimeout(()=>{
+    renderTrain();
+    const bf=$("#trBank"); if(bf){bf.value=it.bankId||"all";}
+    setTimeout(()=>{
+      startSession({mode:"answer",order:"seq",bankId:it.bankId||"all"});
+      const tr=S.list.findIndex(x=>x.id===id);
+      if(tr>=0){S.idx=tr;renderQuestion();}
+    },80);
+  },80);
 }
 function fillSearchFilters(){
   const cats=[...new Set(DATA.items.map(i=>i.cat).filter(Boolean))].sort();
@@ -1202,6 +1570,8 @@ $("#searchInput").addEventListener("keydown",e=>{if(e.key==="Enter")doSearch();}
 $("#catFilter").addEventListener("change",doSearch);
 $("#typeFilter").addEventListener("change",doSearch);
 $("#bankFilter").addEventListener("change",doSearch);
+const _ocEl=document.getElementById("onlyCorrect");
+if(_ocEl){_ocEl.addEventListener("change",()=>{if(typeof doSearch==="function")doSearch();});}
 $("#quickGo").addEventListener("click",()=>{go("search");doSearch();});
 $("#quickSearch").addEventListener("keydown",e=>{if(e.key==="Enter"){go("search");doSearch();}});
 
@@ -1832,14 +2202,25 @@ function splitOptsFromQ(text){
   });
   return {q,opts};
 }
-function optsHtml(opts){
+function optsHtml(opts, ans){
   if(!opts||!opts.length)return "";
-  return '<div class="opts">'+opts.map(o=>'<div class="opt"><span class="opt-label">'+esc(o.label)+'</span><span class="opt-text">'+esc(o.text)+'</span></div>').join("")+'</div>';
+  // 把答案 A/B/... 解析成数组，便于在选项列表上直接标出"哪个对"
+  var labels=(typeof answerLabels==="function"?answerLabels(ans||""):null)||[];
+  var isCorrect=function(o){return labels&&labels.indexOf(o.label)>=0;};
+  return '<div class="opts">'+opts.map(function(o){
+    var correct=isCorrect(o);
+    var cls="opt"+(correct?" correct":"");
+    var mark=correct?'<span class="opt-mark" aria-label="正确答案">✓</span>':"";
+    return '<div class="'+cls+'" data-label="'+esc(o.label)+'">'
+      +'<span class="opt-label">'+esc(o.label)+'</span>'
+      +'<span class="opt-text">'+esc(o.text)+'</span>'
+      +mark+'</div>';
+  }).join("")+'</div>';
 }
 function renderOptsOrInline(i){
-  if(i.opts&&i.opts.length)return optsHtml(i.opts);
+  if(i.opts&&i.opts.length)return optsHtml(i.opts, i.a);
   const split=splitOptsFromQ(i.q||"");
-  if(split.opts.length)return optsHtml(split.opts);
+  if(split.opts.length)return optsHtml(split.opts, i.a);
   return "";
 }
 function cleanQ(i){
@@ -2605,13 +2986,23 @@ function renderBanks(){
   if(!DATA.banks)DATA.banks=[{id:"default",name:"默认题库",color:"#2563eb",def:true,createdAt:Date.now()}];
   box.innerHTML=DATA.banks.map(b=>{
     const n=bankItems(b.id).length;const w=bankItems(b.id).filter(i=>i.wrongCount>0&&!i.mastered).length;
-    return '<div class="bank-card"><span class="dot" style="background:'+esc(b.color||"#2563eb")+'"></span><div class="bc-main"><div class="bc-name">'+esc(b.name)+'</div><div class="bc-sub">'+n+' 题 · '+w+' 错题</div></div>'
-      +'<div class="bc-acts"><button class="mini" data-act="rename" data-id="'+b.id+'">重命名</button>'+(b.def?'':'<button class="mini" data-act="del" data-id="'+b.id+'">删除</button>')+'</div></div>';
+    return '<div class="bank-tile" data-bank="'+b.id+'">'
+      +'<div class="b-ic" style="background:'+esc(b.color||"#2563eb")+'">📚</div>'
+      +'<div class="b-info"><div class="b-name">'+esc(b.name)+'</div>'
+        +'<div class="b-meta">'+n+' 题'+(w?(' · '+w+' 错题'):'')+'</div></div>'
+      +'<div class="ops" style="display:flex;gap:6px"><button class="mini" data-act="rename" data-id="'+b.id+'">重命名</button>'+(b.def?'':'<button class="mini del" data-act="del" data-id="'+b.id+'">删除</button>')+'</div>'
+      +'</div>';
   }).join("");
-  box.querySelectorAll("[data-act]").forEach(btn=>btn.addEventListener("click",()=>{
+  box.querySelectorAll("[data-act]").forEach(btn=>btn.addEventListener("click",(e)=>{
+    e.stopPropagation();
     const id=btn.dataset.id,act=btn.dataset.act;
     if(act==="rename"){const b=DATA.banks.find(x=>x.id===id);prompt2("重命名题库","输入新名称",b.name,(nn)=>{b.name=nn;save();renderBanks();fillBankSelects();renderManageIfOpen();});}
     if(act==="del"){const b=DATA.banks.find(x=>x.id===id);const cnt=bankItems(id).length;confirm2("删除题库","删除题库「"+b.name+"」？其下 "+cnt+" 道题将移到「默认题库」。",()=>{DATA.items.forEach(i=>{if(i.bankId===id)i.bankId="default";});DATA.banks=DATA.banks.filter(x=>x.id!==id);save();renderBanks();fillBankSelects();renderManageIfOpen();toast("已删除并转移题目");});}
+  }));
+  // 单击跳到搜索该题库
+  box.querySelectorAll("[data-bank]").forEach(t=>t.addEventListener("click",(e)=>{
+    if(e.target.closest("[data-act]"))return;
+    go("search");const bf=$("#bankFilter");if(bf){bf.value=t.dataset.bank;doSearch();}
   }));
 }
 function toggleMaster(id){const it=DATA.items.find(x=>x.id===id);if(!it)return;it.mastered=!it.mastered;save();renderManage();toast(it.mastered?"已标记掌握":"已取消掌握");}
@@ -2843,6 +3234,8 @@ function recordSession(){
   if(!S||!S.list||!S.list.length)return;
   try{
     if(!DATA.records)DATA.records=[];
+    // 用户点进练习却一题没答就退出：不记录（避免大量空记录）
+    if(!S.results||!S.results.length)return;
     // 摘要字段，避免记录过大
     const byType={};
     S.list.forEach(it=>{
@@ -2875,44 +3268,61 @@ function recordSession(){
 function renderRecords(){
   const recs=DATA.records||[];
   const ts=todayStart();
-  // 今日统计
   const today=recs.filter(r=>r.at>=ts);
   const todayQ=today.reduce((a,r)=>a+r.total,0);
   const todayC=today.reduce((a,r)=>a+r.correct,0);
+  const todayW=today.reduce((a,r)=>a+r.wrong,0);
   const todaySec=today.reduce((a,r)=>a+r.durationSec,0);
   const p=n=>String(n).padStart(2,"0");
   const hm=Math.floor(todaySec/60)+":"+p(todaySec%60);
-  $("#recToday").innerHTML=
-    '<div class="stat"><div class="n">'+today.length+'</div><div class="l">今日练习次数</div></div>'
-    +'<div class="stat"><div class="n">'+todayQ+'</div><div class="l">今日做题数</div></div>'
-    +'<div class="stat"><div class="n">'+hm+'</div><div class="l">今日时长</div></div>';
-  // 近 7 天柱状图
+  // 头部 hero
+  if($("#recTodaySub")){
+    $("#recTodaySub").textContent=today.length?(today.length+" 次练习 · 共 "+todayQ+" 题 · 用时 "+hm):
+      ("暂无记录 · 去「练习」做几题");
+  }
+  if($("#recToday")){
+    $("#recToday").innerHTML=
+      '<div class="hero-stat"><span class="n">'+today.length+'</span><span class="l">练习次数</span></div>'
+      +'<div class="hero-stat"><span class="n">'+todayQ+'</span><span class="l">做题数</span></div>'
+      +'<div class="hero-stat"><span class="n">'+(todayQ?(Math.round(todayC/todayQ*100)):0)+'%</span><span class="l">正确率</span></div>'
+      +'<div class="hero-stat"><span class="n">'+todayW+'</span><span class="l">错题</span></div>'
+      +'<div class="hero-stat"><span class="n">'+hm+'</span><span class="l">用时</span></div>';
+  }
+  // 近 7 天
   const days=[];
   for(let i=6;i>=0;i--){
     const d=new Date(ts - i*86400000);
     const key=fmtDate(d.getTime());
     const label=p(d.getMonth()+1)+"/"+p(d.getDate());
     const n=recs.filter(r=>fmtDate(r.at)===key).reduce((a,r)=>a+r.total,0);
-    days.push({label,n});
+    days.push({label,n,isToday:i===0});
   }
   const maxN=Math.max(1,...days.map(d=>d.n));
-  $("#recWeekSum").textContent="共 "+days.reduce((a,d)=>a+d.n,0)+" 题";
-  $("#recBars").innerHTML=days.map(d=>
-    '<div class="rec-bar"><div class="n" style="'+(d.n?'':'display:none')+'">'+d.n+'</div>'
-    +'<div class="bar'+(d.n?'':' empty')+'" style="height:'+Math.max(4,Math.round(d.n/maxN*100))+'%"></div>'
-    +'<div class="d">'+d.label+'</div></div>'
-  ).join("");
-  // 最近记录
+  if($("#recWeekSum")) $("#recWeekSum").textContent="共 "+days.reduce((a,d)=>a+d.n,0)+" 题";
+  if($("#recBars")){
+    $("#recBars").innerHTML=days.map(d=>
+      '<div class="day"><div class="n">'+(d.n||"")+'</div>'
+      +'<div class="bar" style="height:'+(d.n?Math.max(8,Math.round(d.n/maxN*100))+'%':'4px')+'"></div>'
+      +'<div class="d" style="'+(d.isToday?'color:#2563eb;font-weight:700':'')+'">'+d.label+'</div></div>'
+    ).join("");
+  }
+  // 最近练习
+  const list=$("#recList");
   if(!recs.length){
-    $("#recList").innerHTML='<div class="rec-empty">还没有练习记录。<br>去「练习」做几题，这里会自动统计。</div>';
+    list.innerHTML='<div class="rec-empty">还没有练习记录。<br>去「练习」做几题，这里会自动统计。</div>';
   }else{
-    $("#recList").innerHTML=recs.slice(0,30).map(r=>{
+    list.innerHTML='<div class="qlist-modern">'+recs.slice(0,30).map((r,i)=>{
       const rate=r.total?Math.round(r.correct/r.total*100):0;
-      const modeTxt=r.exam?"模拟考试":(r.mode==="recite"?"背题":"练习");
-      const what=(r.bankName||"全部题库")+(r.type?" · "+r.type:"")+" · "+modeTxt;
+      const modeTxt=r.exam?"📝 模拟考试":(r.mode==="recite"?"📖 背题":"✏️ 练习");
+      const what=(r.bankName||"全部题库")+(r.type?" · "+r.type:"");
       const when=fmtTimeHM(r.at);
-      return '<div class="rec-row"><div class="when">'+when+'</div><div class="what">'+esc(what)+' · '+r.total+' 题</div><div class="stat-n">'+r.correct+'/'+r.total+' · '+rate+'%</div></div>';
-    }).join("");
+      const scoreColor=rate>=80?"#16a34a":(rate>=60?"#d97706":"#dc2626");
+      return '<div class="qrow-modern" style="cursor:default">'
+        +'<div class="qidx" style="background:'+scoreColor+'22;color:'+scoreColor+'">'+(rate||0)+'%</div>'
+        +'<div class="qbody"><div class="qti">'+esc(what)+' · '+modeTxt+'</div>'
+          +'<div class="qmeta-line"><span>📅 '+when+'</span><span>· '+r.correct+'/'+r.total+' 题</span><span>· '+Math.round(r.durationSec/60)+' 分钟</span></div></div>'
+        +'</div>';
+    }).join("")+'</div>';
   }
   const clr=$("#recClear");
   if(clr)clr.onclick=()=>confirm2("清空练习记录","将删除全部 "+recs.length+" 条练习记录，且无法撤销。",()=>{DATA.records=[];save();renderRecords();toast("已清空");});
@@ -2921,7 +3331,18 @@ function fmtTimeHM(ts){
   const d=new Date(ts);const p=n=>String(n).padStart(2,"0");
   return p(d.getMonth()+1)+"-"+p(d.getDate())+" "+p(d.getHours())+":"+p(d.getMinutes());
 }
-function exitSession(){$("#trainPlay").style.display="none";$("#trainHome").style.display="";$("#trainPlay").innerHTML="";S=null;renderTrain();}
+function exitSession(){
+  // 退出前先记录已答题部分（之前只有模拟考试 timer 到点会触发 recordSession，
+  // 普通练习中途按「退出」就丢，导致练习记录看起来只有模拟考试有）。
+  // 模拟考试同样适用，因为它们共用同一份 S。
+  try { if (typeof recordSession === "function") recordSession(); } catch (e) {}
+  try { save(); } catch (e) {}
+  $("#trainPlay").style.display="none";
+  $("#trainHome").style.display="";
+  $("#trainPlay").innerHTML="";
+  S=null;
+  renderTrain();
+}
 function typeCountsInFilter(filter){
   const list=buildList(filter);
   const counts={};TYPES.forEach(t=>counts[t]=0);
@@ -2987,34 +3408,93 @@ function openExamSetup(filter){
 function renderTrain(){
   $("#trainHome").style.display="";$("#trainPlay").style.display="none";
   const wrongN=wrongItems().length,hardN=hardItems().length;
-  let h='<div class="card"><h2>练习范围</h2><div class="row" style="align-items:center;gap:12px;flex-wrap:wrap;margin:6px 0 2px;">';
-  h+='<label style="color:var(--sub)">题库</label><select id="trBank" style="padding:11px 13px;border:1px solid var(--line);border-radius:10px;background:var(--soft);min-width:170px;">'+bankOptions("all",true)+'</select>';
-  h+='<label style="color:var(--sub)">题型</label><select id="trType" style="padding:11px 13px;border:1px solid var(--line);border-radius:10px;background:var(--soft);min-width:150px;"><option value="">全部题型</option>'+TYPES.map(t=>'<option value="'+t+'">'+t+'</option>').join("")+'</select>';
-  h+='</div></div>';
-  h+='<div class="card"><h2>开始练习</h2><div class="mode-grid">';
-  const modes=[
-    {k:"seq",name:"顺序练习",desc:"按题目顺序逐题作答"},
-    {k:"rand",name:"随机练习",desc:"随机抽取题目作答"},
-    {k:"recite",name:"背题模式",desc:"直接显示答案与解析"},
-    {k:"exam",name:"模拟考试",desc:"限时抽题，交卷出成绩"},
-    {k:"wrong",name:"我的错题",desc:"只练答错且未掌握的题（"+wrongN+"）"},
-    {k:"hard",name:"易错题",desc:"错误次数≥2 的题（"+hardN+"）"},
-    {k:"type",name:"题型练习",desc:"按所选题型集中练习"}
-  ];
-  h+=modes.map(m=>'<div class="mode-card" data-k="'+m.k+'"><div class="mc-name">'+m.name+'</div><div class="mc-desc">'+m.desc+'</div></div>').join("");
-  h+='</div></div>';
+  const totalItems=(DATA.items||[]).length;
+  const doneItems=(DATA.items||[]).filter(i=>(i.rightCount||0)+(i.wrongCount||0)>0).length;
+  const rightN=(DATA.items||[]).reduce((a,i)=>a+(i.rightCount||0),0);
+  const wrongAllN=(DATA.items||[]).reduce((a,i)=>a+(i.wrongCount||0),0);
+  const accuracy=doneItems?Math.round(rightN/(rightN+wrongAllN)*100):0;
+  const pDone=totalItems?Math.round(doneItems/totalItems*100):0;
+  // SVG 圆环半径 38，C=2πr≈238.76
+  const circ=238.76;
+  const dash=circ*(1-pDone/100);
+  let h='<div class="hero-banner" style="margin-bottom:18px">'
+    +'<div class="hero-top">练习中心 · 选择模式</div>'
+    +'<div style="display:flex;align-items:center;gap:18px;margin-top:8px">'
+    +'<div class="circle-progress"><svg viewBox="0 0 84 84">'
+      +'<circle cx="42" cy="42" r="38" class="track" stroke-width="8" fill="none"/>'
+      +'<circle cx="42" cy="42" r="38" class="bar" stroke-width="8" fill="none" stroke-dasharray="'+circ+'" stroke-dashoffset="'+dash+'"/>'
+    +'</svg><div class="num"><b>'+pDone+'%</b><span>已完成</span></div></div>'
+    +'<div style="flex:1">'
+      +'<h1 style="margin:0 0 4px">开始练习</h1>'
+      +'<div class="hero-sub">'+doneItems+' / '+totalItems+' 题 · 正确率 '+accuracy+'%'+(wrongN?' · 待巩固 '+wrongN+' 题':'')+'</div>'
+      +'<div class="hero-stats" style="margin-top:12px">'
+        +'<div class="hero-stat"><span class="n">'+totalItems+'</span><span class="l">题库</span></div>'
+        +'<div class="hero-stat"><span class="n">'+rightN+'</span><span class="l">正确</span></div>'
+        +'<div class="hero-stat"><span class="n">'+wrongN+'</span><span class="l">错题</span></div>'
+        +'<div class="hero-stat"><span class="n">'+hardN+'</span><span class="l">易错</span></div>'
+      +'</div>'
+    +'</div></div></div>';
+
+  // 顶部筛选
+  h+='<div class="card" style="padding:14px 16px"><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">'
+    +'<label style="color:var(--sub);font-size:13px">题库</label>'
+    +'<select id="trBank" style="padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--soft);min-width:150px">'+bankOptions("all",true)+'</select>'
+    +'<label style="color:var(--sub);font-size:13px">题型</label>'
+    +'<select id="trType" style="padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--soft);min-width:140px"><option value="">全部题型</option>'+TYPES.map(t=>'<option value="'+t+'">'+t+'</option>').join("")+'</select>'
+    +'</div></div>';
+
+  // 主模式：顺序 / 随机 / 模拟（3 大色块）
+  h+='<div class="mode-row" style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:18px">'
+    +'<div class="entry-card blue mode-btn mode-btn-seq" data-k="seq" style="margin:0;cursor:pointer">'
+      +'<div class="e-title">📖 顺序练习</div>'
+      +'<div class="e-desc">按题号一题一题刷</div>'
+      +'<div class="e-action">开始 ›</div>'
+      +'<div class="e-icon">📖</div>'
+    +'</div>'
+    +'<div class="entry-card purple mode-btn mode-btn-rand" data-k="rand" style="margin:0;cursor:pointer">'
+      +'<div class="e-title">🎲 随机练习</div>'
+      +'<div class="e-desc">随机抽题作答</div>'
+      +'<div class="e-action">开始 ›</div>'
+      +'<div class="e-icon">🎲</div>'
+    +'</div>'
+    +'<div class="entry-card mode-btn-exam" data-k="exam" style="margin:0;cursor:pointer;background:var(--grad-orange)" id="entryTrainExam">'
+      +'<div class="e-title">📝 模拟考试</div>'
+      +'<div class="e-desc">限时交卷 · 出成绩</div>'
+      +'<div class="e-action">配置 ›</div>'
+      +'<div class="e-icon">📝</div>'
+    +'</div>'
+    +'</div>';
+
+  // 7 格：背题 / 题型 / 错题 / 易错 / 收藏 / 我的记录 / 计算器
+  h+='<div class="shortcut-grid">'
+    +'<div class="shortcut-cell mode-btn" data-k="recite"><div class="ic b">📚</div><div class="lab">背题模式</div><div class="sub">直接看答案</div></div>'
+    +'<div class="shortcut-cell mode-btn" data-k="type"><div class="ic p">🎯</div><div class="lab">题型练习</div><div class="sub">集中刷一类</div></div>'
+    +'<div class="shortcut-cell mode-btn" data-k="wrong"><div class="ic r">❌</div><div class="lab">我的错题</div><div class="sub">'+wrongN+' 题</div></div>'
+    +'<div class="shortcut-cell mode-btn" data-k="hard"><div class="ic o">⚠️</div><div class="lab">易错题</div><div class="sub">'+hardN+' 题</div></div>'
+    +'<div class="shortcut-cell" id="trCalc"><div class="ic g">🧮</div><div class="lab">计算器</div><div class="sub">标准 + 科学</div></div>'
+    +'<div class="shortcut-cell" id="trGoRecords"><div class="ic c">📊</div><div class="lab">练习记录</div><div class="sub">错题统计</div></div>'
+    +'<div class="shortcut-cell" id="trGoSearch"><div class="ic pk">🔍</div><div class="lab">搜题</div><div class="sub">关键词检索</div></div>'
+    +'</div>';
+
   $("#trainHome").innerHTML=h;
-  $("#trainHome").querySelectorAll(".mode-card").forEach(c=>c.addEventListener("click",()=>{
-    const k=c.dataset.k;
-    const filter={bankId:$("#trBank").value,type:$("#trType").value};
-    if(k==="wrong")filter.onlyWrong=true;
-    if(k==="hard")filter.onlyHard=true;
-    if(k==="exam"){openExamSetup(filter);return;}
-    if(k==="type"&&!filter.type){toast("请先选择题型");return;}
-    const mode=(k==="recite")?"recite":"answer";
-    const order=(k==="rand")?"rand":"seq";
-    startSession(Object.assign({mode,order},filter));
-  }));
+  // 模式按钮
+  $("#trainHome").querySelectorAll(".mode-card,.mode-btn,.entry-card[data-k]").forEach(c=>{
+    c.addEventListener("click",()=>{
+      const k=c.dataset.k;
+      const filter={bankId:$("#trBank").value,type:$("#trType").value};
+      if(k==="wrong")filter.onlyWrong=true;
+      if(k==="hard")filter.onlyHard=true;
+      if(k==="exam"){openExamSetup(filter);return;}
+      if(k==="type"&&!filter.type){toast("请先选择题型");return;}
+      const mode=(k==="recite")?"recite":"answer";
+      const order=(k==="rand")?"rand":"seq";
+      startSession(Object.assign({mode,order},filter));
+    });
+  });
+  // 直达
+  const tc=$("#trCalc");if(tc && !tc.__bound){tc.__bound=1;tc.addEventListener("click",()=>window.__SB&&window.__SB.calcOpen&&window.__SB.calcOpen(true));}
+  const tr=$("#trGoRecords");if(tr && !tr.__bound){tr.__bound=1;tr.addEventListener("click",()=>{go("records");renderRecords();});}
+  const ts=$("#trGoSearch");if(ts && !ts.__bound){ts.__bound=1;ts.addEventListener("click",()=>go("search"));}
 }
 $("#btnAddBank").addEventListener("click",()=>{
   prompt2("新建题库","输入题库名称","新题库",(name)=>{
@@ -3670,7 +4150,14 @@ $("#ppBank").addEventListener("change",()=>{renderPPTypeRows();ppState=null;rend
 <button id="calcFab" type="button" aria-label="计算器">÷</button>
 <div id="calcMask"></div>
 <div id="calcPanel" role="dialog" aria-label="计算器">
-  <div class="calc-head"><b>🧮 计算器</b><button id="calcClose" type="button" aria-label="关闭">×</button></div>
+  <div class="calc-head">
+    <b>🧮 计算器</b>
+    <div style="display:flex;gap:6px;align-items:center;">
+      <button id="calcMode" type="button" aria-label="切换科学模式">科学</button>
+      <button id="calcAngle" type="button" aria-label="角度 / 弧度" style="display:none">DEG</button>
+      <button id="calcClose" type="button" aria-label="关闭">×</button>
+    </div>
+  </div>
   <div class="calc-screen"><div class="expr" id="calcExpr">&nbsp;</div><div class="res" id="calcRes">0</div></div>
   <div class="calc-grid">
     <button data-c="clear" class="op">C</button>
@@ -3689,10 +4176,29 @@ $("#ppBank").addEventListener("change",()=>{renderPPTypeRows();ppState=null;rend
     <button data-c="pow" class="op">x²</button>
     <button data-c="eq" class="eq">=</button>
   </div>
+  <!-- 科学模式键盘，默认隐藏；切到"科学"时展开 -->
+  <div class="calc-grid calc-sci" style="display:none;margin-top:8px">
+    <button data-c="sin" class="op">sin</button>
+    <button data-c="cos" class="op">cos</button>
+    <button data-c="tan" class="op">tan</button>
+    <button data-c="pi" class="op">π</button>
+    <button data-c="asin" class="op">asin</button>
+    <button data-c="acos" class="op">acos</button>
+    <button data-c="atan" class="op">atan</button>
+    <button data-c="e" class="op">e</button>
+    <button data-c="ln" class="op">ln</button>
+    <button data-c="log" class="op">log</button>
+    <button data-c="cbrt" class="op">∛</button>
+    <button data-c="ans" class="op">ans</button>
+    <button data-c="pow10" class="op">10ˣ</button>
+    <button data-c="inv" class="op">1/x</button>
+    <button data-c="xpow" class="op">xʸ</button>
+    <button data-c="fac" class="op">n!</button>
+  </div>
 </div>
 
 <script>
-/* ===================== 计算器 ===================== */
+/* ===================== 计算器（标准 + 科学） ===================== */
 (function () {
   if (window.__calcBound) return;
   window.__calcBound = true;
@@ -3702,6 +4208,132 @@ $("#ppBank").addEventListener("change",()=>{renderPPTypeRows();ppState=null;rend
   var exprEl= document.getElementById("calcExpr");
   var resEl = document.getElementById("calcRes");
   var expr = "";
+  var ans = 0;            // 上一次等号计算的结果，可按「ans」回填
+  var angleMode = "DEG";  // 角度模式：DEG（度）/RAD（弧度）
+  var sciMode = false;    // 是否展开科学键盘
+
+  // 把 UI 上的运算符/字符（÷×−√π…）转成 JS 表达式字符串
+  function toJS(s) {
+    if (!s) return "";
+    return s
+      .replace(/×/g, "*")
+      .replace(/÷/g, "/")
+      .replace(/−/g, "-")
+      .replace(/π/g, "Math.PI")
+      .replace(/\be\b/g, "Math.E")                 // 注意：用 \b 防止误伤选项里的 e
+      .replace(/√\(/g, "Math.sqrt(")
+      .replace(/√(\d|\()/g, "Math.sqrt($1)")        // √5、√( 都接 sqrt
+      .replace(/∛\(/g, "Math.cbrt(")
+      .replace(/∛(\d|\()/g, "Math.cbrt($1)")
+      .replace(/10ˣ\s*\(/g, "Math.pow(10,")
+      .replace(/x²/g, "**2")
+      .replace(/xʸ\s*\(/g, "Math.pow(")              // 后跟两个参数：x^y 的占位
+      .replace(/%/g, "/100");
+  }
+
+  // 三角函数的度数/弧度自适应（Math.sin 只接受弧度）
+  function toJSWithAngle(s) {
+    var js = toJS(s);
+    if (angleMode !== "DEG") return js;
+    return js
+      .replace(/\bsin\(/g, "Math.sin(Math.PI/180*")
+      .replace(/\bcos\(/g, "Math.cos(Math.PI/180*")
+      .replace(/\btan\(/g, "Math.tan(Math.PI/180*")
+      .replace(/\basin\(/g, "(180/Math.PI)*Math.asin(")
+      .replace(/\bacos\(/g, "(180/Math.PI)*Math.acos(")
+      .replace(/\batan\(/g, "(180/Math.PI)*Math.atan(");
+  }
+
+  function evalExpr(s) {
+    var js = toJSWithAngle(s);
+    // 仅白名单：数字、运算符、小数点、括号、Math.* 函数
+    // 去掉 Math.* 后还出现非白名单字符直接拒绝
+    var stripped = js.replace(/Math\.(sin|cos|tan|asin|acos|atan|sqrt|cbrt|pow|log|PI|E|abs|floor|ceil|round)\(/g, "");
+    if (!/^[0-9+\-*/().,\s]+$/.test(js.replace(/Math\./g, "").replace(/\bMath\b/g, ""))) {
+      if (/[a-zA-Z]/.test(stripped)) throw new Error("illegal");
+      if (!/^[0-9+\-*/().,\s]+$/.test(stripped)) throw new Error("illegal");
+    }
+    // eslint-disable-next-line no-new-func
+    var v = Function('"use strict";return (' + js + ')')();
+    return v;
+  }
+
+  function fmt(v) {
+    if (typeof v !== "number" || !isFinite(v)) return "错误";
+    return String(Math.round(v * 1e10) / 1e10);
+  }
+
+  function render() {
+    exprEl.innerHTML = esc(expr) || "&nbsp;";
+    try {
+      if (!expr) { resEl.textContent = "0"; return; }
+      resEl.textContent = fmt(evalExpr(expr));
+    } catch (e) { resEl.textContent = "…"; }
+  }
+
+  // 阶乘（n!）：非负整数，超 170 直接溢出
+  function factorial(n) {
+    if (n < 0 || n !== Math.floor(n) || n > 170) throw new Error("illegal");
+    var r = 1;
+    for (var i = 2; i <= n; i++) r *= i;
+    return r;
+  }
+
+  function press(key) {
+    if (key === "clear") expr = "";
+    else if (key === "eq") {
+      try {
+        var v = evalExpr(expr);
+        if (typeof v === "number" && isFinite(v)) {
+          ans = v;
+          expr = fmt(v);
+        }
+      } catch (e) { expr = ""; resEl.textContent = "错误"; return; }
+    }
+    else if (key === "paren") {
+      // 智能补括号：上一个字符是数字/）/π/e/ans 时补 ")"，否则补 "("
+      var last = expr.slice(-1);
+      var opens = (expr.match(/\(/g) || []).length;
+      var closes = (expr.match(/\)/g) || []).length;
+      if (/[0-9)πe)!.]$/.test(last) || opens > closes) {
+        // 已闭合过但还想补：仍补 ")"
+        expr += ")";
+      } else {
+        expr += "(";
+      }
+    }
+    else if (key === "sqrt") expr += "√(";
+    else if (key === "pow") expr += "x²";
+    else if (key === "pow10") expr += "10ˣ(";
+    else if (key === "xpow") expr += "xʸ(";          // 用法：x^y( a,b ) 类似 pow(a,b)
+    else if (key === "cbrt") expr += "∛(";
+    else if (key === "pi") expr += "π";
+    else if (key === "e") expr += "e";
+    else if (key === "ans") expr += String(ans);
+    else if (key === "inv") expr += "(1/(";             // 1/x：用括号规避运算符优先级
+    else if (key === "fac") {
+      // n!：抽紧贴在前面的"数字段"做阶乘
+      var m = /([0-9.]+)$/.exec(expr);
+      if (m) {
+        try {
+          var n = parseFloat(m[1]);
+          var f = factorial(n);
+          ans = f;
+          expr = expr.slice(0, -m[1].length) + fmt(f);
+        } catch (e) { resEl.textContent = "错误"; return; }
+      } else {
+        resEl.textContent = "请先输入数字";
+        return;
+      }
+    }
+    else if (key === "sin" || key === "cos" || key === "tan" ||
+             key === "asin" || key === "acos" || key === "atan" ||
+             key === "ln" || key === "log") {
+      expr += key + "(";
+    }
+    else expr += key === "div" ? "÷" : key === "mul" ? "×" : key === "sub" ? "−" : key === "add" ? "+" : key === "percent" ? "%" : key;
+    render();
+  }
 
   function show(open) {
     fab.classList.toggle("on", !open);
@@ -3709,47 +4341,34 @@ $("#ppBank").addEventListener("change",()=>{renderPPTypeRows();ppState=null;rend
     panel.classList.toggle("on", open);
     if (open) render();
   }
-  function render() {
-    exprEl.innerHTML = esc(expr) || "&nbsp;";
-    try {
-      if (!expr) { resEl.textContent = "0"; return; }
-      var safe = expr
-        .replace(/×/g, "*").replace(/÷/g, "/").replace(/−/g, "-")
-        .replace(/√\(/g, "Math.sqrt(").replace(/√/g, "Math.sqrt(")
-        .replace(/x²/g, "**2").replace(/%/g, "/100")
-        .replace(/Math\.sqrt\(\)/g, "");
-      // 只允许数字/运算符/括号/小数点/Math.sqrt
-      if (!/^[0-9+\-*/().Mathsqrt, ]+$/.test(safe) || /[a-zA-Z]/.test(safe.replace(/Math\.sqrt/g, ""))) {
-        resEl.textContent = "…";
-        return;
-      }
-      var val = Function('"use strict";return (' + safe + ')')();
-      resEl.textContent = (typeof val === "number" && isFinite(val)) ? String(Math.round(val * 1e10) / 1e10) : "错误";
-    } catch (e) { resEl.textContent = "…"; }
-  }
-  function press(key) {
-    if (key === "clear") expr = "";
-    else if (key === "eq") {
-      try {
-        var safe = expr.replace(/×/g,"*").replace(/÷/g,"/").replace(/−/g,"-")
-          .replace(/√/g,"Math.sqrt(").replace(/x²/g,"**2").replace(/%/g,"/100");
-        var v = Function('"use strict";return (' + safe + ')')();
-        if (typeof v === "number" && isFinite(v)) { expr = String(Math.round(v * 1e10) / 1e10); }
-      } catch (e) { expr = ""; }
-    }
-    else if (key === "paren") {
-      expr += (expr.match(/\(/g) || []).length > (expr.match(/\)/g) || []).length ? ")" : "(";
-    }
-    else if (key === "sqrt") expr += "√(";
-    else if (key === "pow") expr += "x²";
-    else expr += key === "div" ? "÷" : key === "mul" ? "×" : key === "sub" ? "−" : key === "add" ? "+" : key === "percent" ? "%" : key;
-    render();
-  }
+
   if (fab) fab.addEventListener("click", function () { show(true); });
   if (mask) mask.addEventListener("click", function () { show(false); });
   var closeBtn = document.getElementById("calcClose");
   if (closeBtn) closeBtn.addEventListener("click", function () { show(false); });
-  var grid = panel && panel.querySelector(".calc-grid");
+
+  // 科学模式切换按钮
+  var modeBtn = document.getElementById("calcMode");
+  var angleBtn = document.getElementById("calcAngle");
+  if (modeBtn) {
+    modeBtn.addEventListener("click", function () {
+      sciMode = !sciMode;
+      var sci = panel.querySelector(".calc-sci");
+      if (sci) sci.style.display = sciMode ? "" : "none";
+      modeBtn.classList.toggle("on", sciMode);
+      modeBtn.textContent = sciMode ? "标准" : "科学";
+      if (angleBtn) angleBtn.style.display = sciMode ? "" : "none";
+    });
+  }
+  if (angleBtn) {
+    angleBtn.addEventListener("click", function () {
+      angleMode = angleMode === "DEG" ? "RAD" : "DEG";
+      angleBtn.textContent = angleMode;
+      render();
+    });
+  }
+
+  var grid = panel;
   if (grid) grid.addEventListener("click", function (ev) {
     var b = ev.target.closest && ev.target.closest("button[data-c]");
     if (b) press(b.getAttribute("data-c"));
@@ -3783,22 +4402,32 @@ $("#ppBank").addEventListener("change",()=>{renderPPTypeRows();ppState=null;rend
     var card = document.querySelector("#trainPlay .play-card");
     if (!card) return;
 
+    // 先清掉上一题残留的 boost 元素 —— 否则每次 renderQuestion 都会 append 新的 .play-fav/.play-top/.auto-next/.play-tools 进来，
+    // 导致 DOM 不停增长最终卡死；点 fav 又会触发 renderQuestion → 死循环。
+    card.querySelectorAll('[data-boost="1"]').forEach(function (n) { n.remove(); });
+
     // 1) 收藏按钮（右上角）
     var fav = document.createElement("button");
+    fav.setAttribute("data-boost", "1");
     fav.className = "play-fav" + (it.fav ? " on" : "");
     fav.type = "button";
     fav.textContent = it.fav ? "★" : "☆";
     fav.title = "收藏";
+    var favBusy = false; // 防抖：避免双击触发 renderQuestion 重入
     fav.addEventListener("click", function () {
+      if (favBusy) return;
+      favBusy = true;
       it.fav = !it.fav;
       save();
       if (typeof renderQuestion === "function") renderQuestion();
       toast(it.fav ? "已收藏" : "已取消收藏");
+      setTimeout(function () { favBusy = false; }, 300);
     });
     card.appendChild(fav);
 
     // 2) 模式切换 tab（答题 / 背题）
     var top = document.createElement("div");
+    top.setAttribute("data-boost", "1");
     top.className = "play-top";
     top.innerHTML =
       '<div class="play-tabs">' +
@@ -3817,6 +4446,7 @@ $("#ppBank").addEventListener("change",()=>{renderPPTypeRows();ppState=null;rend
     // 3) 自动判分 + 自动下一题：单选/判断题已作答 → 显示反馈条 + 1.6s 自动下一题
     if (S.mode !== "recite" && ans && ans.correct !== null) {
       var fb = document.createElement("div");
+      fb.setAttribute("data-boost", "1");
       fb.className = "auto-next " + (ans.correct ? "ok" : "no");
       fb.innerHTML = ans.correct
         ? '<span>✅ 回答正确</span>'
@@ -3840,8 +4470,9 @@ $("#ppBank").addEventListener("change",()=>{renderPPTypeRows();ppState=null;rend
       }
     }
 
-    // 4) 底部工具栏：收藏/计算器/交卷 已有，加 上一题/下一题 快捷
+    // 4) 底部工具栏：上一题/下一题/计算器
     var tools = document.createElement("div");
+    tools.setAttribute("data-boost", "1");
     tools.className = "play-tools";
     tools.innerHTML =
       '<button class="btn" id="bdPrev"' + (S.idx === 0 ? ' disabled style="opacity:.5"' : '') + '>‹ 上一题</button>' +
@@ -3858,40 +4489,51 @@ $("#ppBank").addEventListener("change",()=>{renderPPTypeRows();ppState=null;rend
     };
     var bc = document.getElementById("bdCalc");
     if (bc) bc.onclick = function () { if (window.__SB && typeof window.__SB.calcOpen === "function") window.__SB.calcOpen(true); };
+  }
 
-    // 5) 左右滑动切换题（触摸）
-    var startX = null, startY = null, moved = false;
+  // 5) 左右滑动切换题（触摸）—— 整段只绑一次，绑在 IIFE 顶层而不是 bindBoost 里，
+  //    避免每次 renderQuestion 都叠一套 touchend handler（一次滑动触发 N 次 → 跳到第 4+98 题 → DOM 膨胀卡死）
+  (function bindSwipeOnce() {
     var trainPlay = document.getElementById("trainPlay");
-    if (trainPlay) {
-      trainPlay.addEventListener("touchstart", function (e) {
-        if (e.touches.length !== 1) return;
-        startX = e.touches[0].clientX;
-        startY = e.touches[0].clientY;
-        moved = false;
-      }, { passive: true });
-      trainPlay.addEventListener("touchmove", function (e) {
-        if (startX === null) return;
-        var dx = e.touches[0].clientX - startX;
-        var dy = e.touches[0].clientY - startY;
-        if (Math.abs(dx) > 12 && Math.abs(dx) > Math.abs(dy)) { moved = true; }
-      }, { passive: true });
-      trainPlay.addEventListener("touchend", function (e) {
-        if (startX === null) return;
-        var dx = (e.changedTouches[0].clientX - startX);
-        var dy = (e.changedTouches[0].clientY - startY);
-        startX = null; startY = null;
-        if (!moved || Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy)) return;
-        moved = false;
+    if (!trainPlay) { setTimeout(bindSwipeOnce, 200); return; }
+    if (trainPlay.__swipeBound) return;
+    trainPlay.__swipeBound = true;
+    var startX = null, startY = null, moved = false, busy = false;
+    trainPlay.addEventListener("touchstart", function (e) {
+      if (e.touches.length !== 1) return;
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+      moved = false;
+    }, { passive: true });
+    trainPlay.addEventListener("touchmove", function (e) {
+      if (startX === null) return;
+      var dx = e.touches[0].clientX - startX;
+      var dy = e.touches[0].clientY - startY;
+      if (Math.abs(dx) > 12 && Math.abs(dx) > Math.abs(dy)) { moved = true; }
+    }, { passive: true });
+    trainPlay.addEventListener("touchend", function (e) {
+      if (startX === null || busy) return;
+      busy = true;
+      var dx = (e.changedTouches[0].clientX - startX);
+      var dy = (e.changedTouches[0].clientY - startY);
+      startX = null; startY = null;
+      if (!moved || Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy)) { busy = false; return; }
+      moved = false;
+      if (typeof S === "undefined" || !S || !S.list || S.idx == null) { busy = false; return; }
+      // 用 setTimeout 把 renderQuestion 推到下一个 tick，避免繁忙回调中 paint 未完成导致跳题。
+      setTimeout(function () {
+        busy = false;
+        if (!S || !S.list) return;
         if (dx < 0) { // 左滑 → 下一题
           var it2 = S.list[S.idx];
-          if (!S.answered[it2.id]) S.results.push({ id: it2.id, correct: null });
+          if (it2 && !S.answered[it2.id]) S.results.push({ id: it2.id, correct: null });
           if (S.idx < S.list.length - 1) { S.idx++; renderQuestion(); } else { finishSession(); }
-        } else if (S.idx > 0) { // 右滑 → 上一题
-          S.idx--; renderQuestion();
+        } else { // 右滑 → 上一题
+          if (S.idx > 0) { S.idx--; renderQuestion(); }
         }
-      }, { passive: true });
-    }
-  }
+      }, 30);
+    }, { passive: true });
+  })();
 })();
 </script>
 <script>
