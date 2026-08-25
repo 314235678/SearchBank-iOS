@@ -826,6 +826,12 @@
     <section class="view" id="v-search">
       <div class="card">
         <h2><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg>试题搜索</h2>
+        <!-- v2.13：最近搜过的快捷下拉 -->
+        <div id="searchHistoryBar" style="display:none;margin-bottom:8px;padding:6px 10px;background:var(--soft);border-radius:10px;font-size:13px;color:var(--sub);align-items:center;gap:6px;flex-wrap:wrap">
+          <span>最近搜过：</span>
+          <div id="searchHistoryList" style="display:flex;flex-wrap:wrap;gap:6px;flex:1"></div>
+          <button id="clearSearchHistory" type="button" style="background:transparent;border:none;color:var(--sub);cursor:pointer;font-size:12px;padding:2px 6px">清空历史</button>
+        </div>
         <!-- 顶部搜索框：v2.6 改成 textarea，可显示完整题干、方便手动删除多余选项 -->
         <div style="position:relative;margin-bottom:12px;">
           <textarea id="searchInput" rows="1" placeholder="输入关键字（比如：习近平、安全生产、装备精良…）"
@@ -1015,6 +1021,14 @@
     <!-- v2.8 OCR 高级选项（红色背景白化 + 错别字纠正） -->
     <div class="field" style="margin-top:8px"><b style="color:var(--pri-d)">📷 OCR 高级选项（iOS 原生 Vision）</b></div>
     <div style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--sub);margin-bottom:8px;">
+      <!-- v2.13 新增：OCR 搜题默认模式（提练常丢题干，用户可主动选） -->
+      <div style="display:flex;align-items:center;gap:6px;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:6px 8px;">
+        <span style="font-weight:600">图片搜题默认模式：</span>
+        <select id="optOcrMode" style="flex:1;padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:#fff;font-size:13px">
+          <option value="raw">识别全文（推荐，含"考试复习/单选题"等噪声）</option>
+          <option value="stem">自动提炼题干（速度快，但红色界面常丢题干）</option>
+        </select>
+      </div>
       <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
         <input type="checkbox" id="optWhitenRed" checked> 红色背景自动白化（截图题库"考试复习"红色背景变白底，更准）
       </label>
@@ -1285,12 +1299,39 @@ function go(view){
   $all(".view").forEach(v=>v.classList.toggle("on",v.id==="v-"+view));
   $("#pageTitle").textContent=TITLES[view]||"搜题平台";
   if(view==="home"){renderHome();bindHomeV24();}
-  if(view==="search"){fillSearchFilters();doSearch();}
+  if(view==="search"){fillSearchFilters();renderSearchHistory();doSearch();}
   if(view==="manage")renderManage();
   if(view==="import")fillBankSelects();
   if(view==="train")renderTrain();
   if(view==="records")renderRecords();
   if(view==="paper")renderPaper();
+}
+// v2.13：渲染历史搜索下拉
+function renderSearchHistory(){
+  var hist=[];
+  try{hist=JSON.parse(localStorage.getItem("sb_search_history")||"[]");}catch(e){}
+  var bar=$("#searchHistoryBar");var list=$("#searchHistoryList");
+  if(!bar||!list)return;
+  if(!hist.length){bar.style.display="none";return;}
+  bar.style.display="flex";
+  list.innerHTML=hist.slice(0,12).map(function(k){
+    return '<button type="button" class="btn ghost" data-key="'+esc(k)+'" style="padding:3px 10px;font-size:12px;border-radius:14px;line-height:1.4">'+esc(k.length>20?k.slice(0,20)+"…":k)+'</button>';
+  }).join("");
+  list.querySelectorAll("button[data-key]").forEach(function(b){
+    b.onclick=function(){
+      var k=b.getAttribute("data-key");
+      $("#searchInput").value=k;
+      if(typeof autoResizeSearch==="function")autoResizeSearch();
+      doSearch();
+    };
+  });
+  var cb=$("#clearSearchHistory");
+  if(cb && !cb.__bound){cb.__bound=1;cb.onclick=function(){
+    if(!confirm("清空所有搜索历史？"))return;
+    localStorage.removeItem("sb_search_history");
+    renderSearchHistory();
+    toast("已清空搜索历史");
+  };}
 }
 $all(".nav button,.bot button").forEach(b=>b.addEventListener("click",()=>go(b.dataset.view)));
 
@@ -1608,10 +1649,21 @@ function finishSearch(acc,q,filters){
   const filtersTxt=filters.length?('（'+filters.join(' · ')+'）'):'';
   meta.textContent=res.length?('匹配 '+res.length+' 道题'+filtersTxt+'（按相关度排序）'):'未找到匹配的题目';
   if(!res.length){box.innerHTML='<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg><div>没有匹配结果，换个关键词或筛选条件试试</div></div>';return;}
+  // v2.13：保存历史搜索（去重，最多 50 条）
+  try{
+    var k=String($("#searchInput").value||"").trim();
+    if(k){
+      var hist=JSON.parse(localStorage.getItem("sb_search_history")||"[]");
+      hist=hist.filter(function(x){return x!==k;});
+      hist.unshift(k);
+      if(hist.length>50)hist=hist.slice(0,50);
+      localStorage.setItem("sb_search_history",JSON.stringify(hist));
+    }
+  }catch(e){}
   const PAGE=50;
-  if(res.length<=PAGE){box.innerHTML=res.map((i,idx)=>qCardFull(i,idx+1)).join("");}
+  if(res.length<=PAGE){box.innerHTML=res.map((i,idx)=>qCardFull(i,idx+1,q)).join("");}
   else{
-    box.innerHTML=res.slice(0,PAGE).map((i,idx)=>qCardFull(i,idx+1)).join("")
+    box.innerHTML=res.slice(0,PAGE).map((i,idx)=>qCardFull(i,idx+1,q)).join("")
       +'<div style="text-align:center;margin:18px 0;"><button class="btn" id="btnLoadMore">加载更多（'+res.length+' 条中已显示 '+PAGE+'）</button></div>';
     bindLoadMore(res,PAGE);
   }
@@ -1629,7 +1681,8 @@ function bindLoadMore(res,PAGE){
     if(more){box.insertAdjacentHTML("beforeend",'<div style="text-align:center;margin:18px 0;"><button class="btn" id="btnLoadMore">加载更多（'+res.length+' 条中已显示 '+(cur+PAGE)+'）</button></div>');bindLoadMore(res,PAGE);}
   };
 }
-function qCardFull(i,idx){
+function qCardFull(i,idx,highlightQ){
+  // v2.13：关键词高亮（题干里命中的搜索词加底色）
   const cat=i.cat?'<span class="tag">'+esc(i.cat)+'</span>':'<span class="tag" style="background:#f1f5f9;color:#94a3b8">未分类</span>';
   const note=i.note?'<div class="note" style="color:var(--sub);font-size:13px;margin-top:8px;padding-top:8px;border-top:1px dashed var(--line)">📝 解析：'+esc(i.note)+'</div>':'';
   const img=i.img?'<img class="imgprev" src="'+i.img+'" alt="题图">':'';
@@ -1638,10 +1691,40 @@ function qCardFull(i,idx){
   const typeTag=i.type?'<span class="tag" style="background:#eef2ff;color:#4338ca">'+esc(i.type)+'</span>':'';
   const ansChip=typeof answerLabels==="function"&&answerLabels(i.a||"")?('<span class="tag" style="background:#ecfdf5;color:#16a34a;border:1px solid #bbf7d0;font-weight:600">答案 '+esc(i.a)+'</span>'):('<span class="tag" style="background:#fef9c3;color:#92400e">答案 '+esc(i.a)+'</span>');
   const metaLine='<div style="display:flex;gap:6px;flex-wrap:wrap;margin:6px 0 10px;align-items:center">'+ansChip+typeTag+cat+'</div>';
-  return '<div class="qcard" style="border-radius:18px;padding:16px 18px"><div class="qh"><span class="idx">'+idx+'.</span><span>'+esc(cleanQ(i))+'</span></div>'
+  // 关键词高亮
+  const qText=esc(cleanQ(i));
+  const qHtml = highlightQ ? highlightMatches(qText, highlightQ) : qText;
+  return '<div class="qcard" style="border-radius:18px;padding:16px 18px"><div class="qh"><span class="idx">'+idx+'.</span><span>'+qHtml+'</span></div>'
     +metaLine+img+opts+note
     +'<div class="ops"><button class="mini" onclick="editItem(\''+i.id+'\')">编辑</button><button class="mini del" onclick="delItem(\''+i.id+'\')">删除</button>'
     +'<button class="mini" onclick="quickLocate(\''+i.id+'\')">定位到练习</button></div></div>';
+}
+
+// v2.13：把搜索 query 中命中的关键词在题干文本里高亮（<mark> 标签）
+function highlightMatches(text, query){
+  if(!text||!query)return text;
+  // 把 query 拆 2-4 字关键词（按用户原查询），过滤无意义短串
+  var kws=[];
+  var s=String(query).replace(/[^\p{L}\p{N}]/gu," ");
+  s.split(/\s+/).forEach(function(w){if(w&&w.length>=2)kws.push(w);});
+  // 也加 2-3 字滑窗（避免长 query 中关键短词被忽略）
+  for(var i=0;i+2<=s.length;i+=1){
+    var w2=s.slice(i,i+2);if(w2.length>=2)kws.push(w2);
+  }
+  if(kws.length===0)return text;
+  // 去重 + 按长度倒序
+  var seen={};var sorted=[];
+  kws.forEach(function(w){if(!seen[w]){seen[w]=1;sorted.push(w);}});
+  sorted.sort(function(a,b){return b.length-a.length;});
+  // 转义 HTML 防止用户题干里含 < > 等被高亮标记污染
+  var t=text;
+  sorted.forEach(function(w){
+    var safe=esc(w);
+    // 已经转义了 text，关键词在 esc 后的 text 里
+    var re=new RegExp(safe.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),"g");
+    t=t.replace(re,'<mark style="background:#fde68a;color:#92400e;padding:0 2px;border-radius:3px">'+safe+'</mark>');
+  });
+  return t;
 }
 function quickLocate(id){
   const it=DATA.items.find(x=>x.id===id);
@@ -3138,10 +3221,20 @@ document.getElementById("btnOcrClear").addEventListener("click",()=>{$("#setOcr"
 function bindOcrAdvOptions(){
   if(!$("#optWhitenRed"))return;
   var d=function(k){return localStorage.getItem("sb_"+k);};
+  // v2.13 强制默认 raw：v2.11 之后用户旧 localStorage 可能存 "stem"，导致默认模式不生效
+  // 检测到老版本（v2.11 之前）从未主动设置过 default_mode，则强制设为 raw
+  if(d("ocr_default_mode")===null){try{localStorage.setItem("sb_ocr_default_mode","raw");}catch(e){}}
+  $("#optOcrMode").value=d("ocr_default_mode")||"raw";
   $("#optWhitenRed").checked=d("ocr_whiten_red")!=="0";
   $("#optTypoFix").checked=d("ocr_typo_fix")!=="0";
   $("#optSingleCol").checked=d("ocr_single_col")==="1";
   $("#optMaxEdge").value=d("ocr_max_edge")||"1600";
+  $("#optOcrMode").onchange=function(){
+    localStorage.setItem("sb_ocr_default_mode",this.value);
+    // 同步给已加载的 lastOCR.mode
+    try{if(window.__SB&&window.__SB.__lastOCR)window.__SB.__lastOCR.mode=this.value;}catch(e){}
+    toast("默认模式已改为："+(this.value==="raw"?"识别全文":"自动提炼题干"));
+  };
   $("#optWhitenRed").onchange=function(){localStorage.setItem("sb_ocr_whiten_red",this.checked?"1":"0");syncOcrSettings();};
   $("#optTypoFix").onchange=function(){localStorage.setItem("sb_ocr_typo_fix",this.checked?"1":"0");};
   $("#optSingleCol").onchange=function(){localStorage.setItem("sb_ocr_single_col",this.checked?"1":"0");};
@@ -4889,15 +4982,18 @@ $("#ppBank").addEventListener("change",()=>{renderPPTypeRows();ppState=null;rend
   // FAB loading
   function showLoading(on) { loading.classList.toggle("on", !!on); }
 
-  // 剪贴板：用 navigator.clipboard.readText 拉最近复制文字
+  // 剪贴板：v2.13 优先用原生桥接（解决 WKWebView 用 file:// 协议时 navigator.clipboard 不可用）
   async function handleClipboard() {
     try {
-      if (!navigator.clipboard || !navigator.clipboard.readText) {
-        toast("当前浏览器不支持读取剪贴板，请用「从相册选图」"); return;
+      var txt = "";
+      // 优先用原生剪贴板（iOS 原生 API，无权限限制）
+      if (window.__SB && typeof window.__SB.readClipboard === "function") {
+        txt = await window.__SB.readClipboard();
+      } else if (navigator.clipboard && navigator.clipboard.readText) {
+        try { txt = await navigator.clipboard.readText(); } catch (e) { txt = ""; }
       }
-      var txt = await navigator.clipboard.readText();
       txt = (txt || "").trim();
-      if (!txt) { toast("剪贴板为空或非文本"); return; }
+      if (!txt) { toast("剪贴板为空或非文本，请先在题库软件里复制文字"); return; }
       // 直接拿剪贴板文字当题干去搜题
       if (typeof go !== "function" || typeof doSearch !== "function") return;
       go("search");

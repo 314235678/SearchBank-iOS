@@ -127,6 +127,27 @@
   };
 
   /**
+   * v2.13 原生剪贴板桥接（解决 WKWebView 用 file:// 时 navigator.clipboard 不可用）
+   * 内部走 UIPasteboard.general.string（iOS 系统剪贴板），无 WebView 权限限制
+   * 同时也写剪贴板（writeClipboard）
+   */
+  window.__SB.readClipboard = function () {
+    return post("readClipboard", {}).then(function (r) {
+      if (r && typeof r.text === "string") return r.text;
+      // fallback：尝试 WebView API
+      if (navigator.clipboard && navigator.clipboard.readText) {
+        return navigator.clipboard.readText().catch(function () { return ""; });
+      }
+      return "";
+    });
+  };
+  window.__SB.writeClipboard = function (text) {
+    return post("writeClipboard", { text: String(text || "") }).then(function (r) {
+      return !(r && r.error);
+    });
+  };
+
+  /**
    * 解析 searchbank:// URL 并触发对应行为
    *   searchbank://fab-camera       → 触发 FAB 拍照
    *   searchbank://fab-album        → 触发 FAB 相册

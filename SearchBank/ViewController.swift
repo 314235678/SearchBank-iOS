@@ -182,6 +182,11 @@ class ViewController: UIViewController,
             handleSetSetting(id: id, payload: payload)
         case "getSetting":
             handleGetSetting(id: id, payload: payload)
+        // v2.13：原生剪贴板桥接（WKWebView 用 file:// 协议时 navigator.clipboard 不可用）
+        case "readClipboard":
+            handleReadClipboard(id: id)
+        case "writeClipboard":
+            handleWriteClipboard(id: id, payload: payload)
         default:
             respond(id: id, result: ["error": "unknown type: \(type)"])
         }
@@ -446,6 +451,23 @@ class ViewController: UIViewController,
         }
         let value = UserDefaults.standard.object(forKey: key)
         respond(id: id, result: ["value": value as Any])
+    }
+
+    // MARK: - 原生剪贴板（v2.13 桥接：解决 WKWebView 用 file:// 协议时 navigator.clipboard 不可用的问题）
+
+    /// 读系统剪贴板文本（UIPasteboard.general.string）。
+    /// iOS 13+ 在 WKWebView 中剪贴板访问需要用户交互授权；这里从原生 API 直接读，绕开 WebView 权限限制。
+    /// 同时作为快捷指令 OCR 全文链路的核心（searchbank://fab-clipboard 路径用此读剪贴板）
+    private func handleReadClipboard(id: String) {
+        let s = UIPasteboard.general.string ?? ""
+        respond(id: id, result: ["text": s])
+    }
+
+    /// 写系统剪贴板文本
+    private func handleWriteClipboard(id: String, payload: [String: Any]) {
+        let text = (payload["text"] as? String) ?? ""
+        UIPasteboard.general.string = text
+        respond(id: id, result: ["ok": true])
     }
 
     // MARK: - 拍照（FAB 相机按钮使用）
