@@ -29,6 +29,10 @@ settings:
     MARKETING_VERSION: "1.0.0"
     CURRENT_PROJECT_VERSION: "1"
     DEAD_CODE_STRIPPING: "YES"
+    # Xcode 16+ 会为资源目录生成 Swift/ObjC 符号，编译时需要模拟器运行时；
+    # 在无模拟器的 CI 构建机上会导致 ARCHIVE FAILED。关闭它即可正常归档。
+    ASSETCATALOG_COMPILER_GENERATE_ASSET_SYMBOLS: "NO"
+    ENABLE_ASSET_SYMBOL_GENERATION: "NO"
     # WKWebView 需开启运行时对 JIT/内联脚本的支持（iOS 14 默认开，显式声明更稳妥）
     ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES: "YES"
 targets:

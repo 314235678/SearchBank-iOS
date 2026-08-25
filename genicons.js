@@ -65,26 +65,26 @@ function makePNG(size) {
   ]);
 }
 
-// [filename, size, idiom, scale, (optional) platforms]
+// [filename, pixelSize, idiom, scale, pointSize]
 const ICONS = [
-  ["icon-20@2x.png", 40, "iphone", "2x"],
-  ["icon-20@3x.png", 60, "iphone", "3x"],
-  ["icon-29@2x.png", 58, "iphone", "2x"],
-  ["icon-29@3x.png", 87, "iphone", "3x"],
-  ["icon-40@2x.png", 80, "iphone", "2x"],
-  ["icon-40@3x.png", 120, "iphone", "3x"],
-  ["icon-60@2x.png", 120, "iphone", "2x"],
-  ["icon-60@3x.png", 180, "iphone", "3x"],
-  ["icon-76.png", 76, "ipad", "1x"],
-  ["icon-76@2x.png", 152, "ipad", "2x"],
-  ["icon-83.5@2x.png", 167, "ipad", "2x"],
-  ["icon-1024.png", 1024, "ios-marketing", "1x"]
+  ["icon-20@2x.png", 40, "iphone", "2x", "20x20"],
+  ["icon-20@3x.png", 60, "iphone", "3x", "20x20"],
+  ["icon-29@2x.png", 58, "iphone", "2x", "29x29"],
+  ["icon-29@3x.png", 87, "iphone", "3x", "29x29"],
+  ["icon-40@2x.png", 80, "iphone", "2x", "40x40"],
+  ["icon-40@3x.png", 120, "iphone", "3x", "40x40"],
+  ["icon-60@2x.png", 120, "iphone", "2x", "60x60"],
+  ["icon-60@3x.png", 180, "iphone", "3x", "60x60"],
+  ["icon-76.png", 76, "ipad", "1x", "76x76"],
+  ["icon-76@2x.png", 152, "ipad", "2x", "76x76"],
+  ["icon-83.5@2x.png", 167, "ipad", "2x", "83.5x83.5"],
+  ["icon-1024.png", 1024, "ios-marketing", "1x", "1024x1024"]
 ];
 
 const images = [];
-for (const [name, size, idiom, scale] of ICONS) {
+for (const [name, size, idiom, scale, pointSize] of ICONS) {
   fs.writeFileSync(path.join(DIR, name), makePNG(size));
-  images.push({ idiom, scale, size: size + "x" + size, filename: name });
+  images.push({ idiom, scale, size: pointSize, filename: name });
 }
 
 const contents = {

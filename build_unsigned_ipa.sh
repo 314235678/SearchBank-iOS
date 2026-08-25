@@ -31,15 +31,18 @@ xcodebuild archive \
   -scheme SearchBank \
   -archivePath build/SearchBank.xcarchive \
   -configuration Release \
+  -sdk iphoneos \
   -destination 'generic/platform=iOS' \
   CODE_SIGN_IDENTITY="" \
   CODE_SIGNING_REQUIRED=NO \
   CODE_SIGNING_ALLOWED=NO \
   OTHER_CODE_SIGN_FLAGS="--timestamp=none" \
-  ONLY_ACTIVE_ARCH=NO \
+  ONLY_ACTIVE_ARCH=YES \
   ARCHS="arm64" \
   VALID_ARCHS="arm64" \
-  ENABLE_BITCODE=NO
+  ENABLE_BITCODE=NO \
+  ASSETCATALOG_COMPILER_GENERATE_ASSET_SYMBOLS=NO \
+  ENABLE_ASSET_SYMBOL_GENERATION=NO
 
 APP_PATH="build/SearchBank.xcarchive/Products/Applications/SearchBank.app"
 if [ ! -d "$APP_PATH" ]; then
