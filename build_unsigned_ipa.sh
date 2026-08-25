@@ -52,6 +52,15 @@ if [ ! -d "$APP_PATH" ]; then
   exit 1
 fi
 
+# 校验：www 必须作为「目录」存在于 .app 根目录（App 依赖 Bundle.main 找到 www/index.html）
+if [ ! -d "$APP_PATH/www" ]; then
+  echo "ERROR: www 目录未打进 App（$APP_PATH/www 不存在）——请检查 project.yml 的 folder: reference / postBuildScripts 配置"
+  echo "当前 .app 根目录内容："
+  ls -la "$APP_PATH"
+  exit 1
+fi
+echo "www 资源校验通过：$(ls "$APP_PATH/www" | tr '\n' ' ')"
+
 echo "==> [4/5] 打包为未签名 IPA（Payload/SearchBank.app）"
 rm -rf Payload SearchBank.ipa
 mkdir -p Payload

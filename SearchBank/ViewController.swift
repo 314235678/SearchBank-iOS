@@ -47,8 +47,22 @@ class ViewController: UIViewController,
         ])
     }
 
+    /// 定位包内网页资源根目录。
+    /// 正常布局：SearchBank.app/www/（文件夹引用）。
+    /// 兼容布局：部分 Xcode/XcodeGen 组合会把 www 扁平化复制，
+    /// 使 index.html 等文件直接平铺在 SearchBank.app/ 根目录，这里做兜底。
+    private var wwwRoot: URL? {
+        if let www = Bundle.main.url(forResource: "www", withExtension: nil) {
+            return www
+        }
+        if Bundle.main.url(forResource: "index.html", withExtension: nil) != nil {
+            return Bundle.main.resourceURL
+        }
+        return nil
+    }
+
     private func loadApp() {
-        guard let www = Bundle.main.url(forResource: "www", withExtension: nil) else {
+        guard let www = wwwRoot else {
             showFatal("找不到 www 资源目录")
             return
         }
@@ -190,7 +204,7 @@ class ViewController: UIViewController,
     // MARK: - 读取包内自带题库
 
     private func handleBundledBank(id: String) {
-        guard let www = Bundle.main.url(forResource: "www", withExtension: nil) else {
+        guard let www = wwwRoot else {
             respond(id: id, result: ["error": "缺少 www 目录"])
             return
         }

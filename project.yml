@@ -50,6 +50,29 @@ targets:
         folder: reference          # 作为「文件夹引用」打进 App，保留 www/ 内部结构（index.html、app-bridge.js、搜题题库.json）
         excludes:
           - "**/.DS_Store"
+    postBuildScripts:
+      # 兜底：确保 www 以「目录」形式存在于 App 包根目录。
+      # 某些 Xcode/XcodeGen 组合会把 folder reference 扁平化复制成散文件，
+      # 导致运行时 Bundle.main.url(forResource: "www") 返回 nil（"找不到 www 资源目录"）。
+      # 本脚本在 Copy Bundle Resources 之后执行，强制整体复制 www/ 目录，与 folder reference 互为冗余。
+      - name: Copy www folder into app bundle
+        basedOnDependencyAnalysis: false
+        script: |
+          set -e
+          WWW_SRC="$SRCROOT/www"
+          WWW_DST="$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/www"
+          if [ ! -d "$WWW_SRC" ]; then
+            echo "warning: www source dir missing at $WWW_SRC"
+            exit 0
+          fi
+          case "$WWW_DST" in
+            *".app"*|*".appex"*|*".framework"*) ;;
+            *) echo "error: unexpected bundle path: $WWW_DST"; exit 1 ;;
+          esac
+          rm -rf "$WWW_DST"
+          mkdir -p "$WWW_DST"
+          cp -R "$WWW_SRC/." "$WWW_DST/"
+          echo "www copied -> $WWW_DST ($(du -sh "$WWW_DST" 2>/dev/null | cut -f1))"
     settings:
       base:
         INFOPLIST_FILE: SearchBank/Info.plist
