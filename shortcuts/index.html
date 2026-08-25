@@ -7,8 +7,8 @@
 <style>
   :root{--pri:#2563eb;--pri-d:#1d4ed8;--bg:#eef1f8;}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
-  body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;margin:0;background:var(--bg);color:#141a26;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;-webkit-font-smoothing:antialiased;}
-  .card{background:#fff;border-radius:22px;box-shadow:0 12px 40px rgba(20,30,60,.12);padding:28px 24px;max-width:400px;width:100%;}
+  body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;margin:0;background:var(--bg);color:#141a26;min-height:100vh;padding:20px;-webkit-font-smoothing:antialiased;}
+  .card{background:#fff;border-radius:22px;box-shadow:0 12px 40px rgba(20,30,60,.12);padding:28px 24px;max-width:460px;margin:0 auto;}
   .logo{width:64px;height:64px;border-radius:18px;background:linear-gradient(135deg,var(--pri),var(--pri-d));display:flex;align-items:center;justify-content:center;margin:0 auto 14px;box-shadow:0 8px 20px rgba(37,99,235,.3);}
   .logo svg{width:32px;height:32px;stroke:#fff;}
   h1{font-size:20px;margin:0 0 4px;text-align:center;}
@@ -16,10 +16,15 @@
   .btn{display:block;width:100%;padding:15px;border:none;border-radius:14px;font-size:16px;font-weight:700;cursor:pointer;color:#fff;background:linear-gradient(135deg,var(--pri),var(--pri-d));box-shadow:0 8px 20px rgba(37,99,235,.28);text-align:center;text-decoration:none;margin-bottom:12px;}
   .btn:active{transform:scale(.97);}
   .btn.ghost{background:#eef1f8;color:var(--pri-d);box-shadow:none;border:1px solid #dfe5f0;}
-  .step{display:flex;gap:12px;align-items:flex-start;margin:10px 0;font-size:14px;line-height:1.6;color:#333;}
+  .btn.green{background:linear-gradient(135deg,#16a34a,#15803d);box-shadow:0 8px 20px rgba(22,163,74,.25);}
+  h2{font-size:16px;margin:24px 0 10px;color:#141a26;}
+  .step{display:flex;gap:12px;align-items:flex-start;margin:10px 0;font-size:14px;line-height:1.65;color:#333;}
   .step .num{flex:0 0 26px;width:26px;height:26px;border-radius:50%;background:#e9f1ff;color:var(--pri-d);font-weight:700;display:flex;align-items:center;justify-content:center;font-size:13px;margin-top:1px;}
+  .step b{color:#141a26;}
   .tip{background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:12px;padding:12px 14px;font-size:13px;line-height:1.7;margin-top:16px;}
-  .url{font-size:13px;color:#5f6b7e;background:#f6f8fc;border-radius:8px;padding:8px 10px;word-break:break-all;margin-top:6px;}
+  .tip.blue{background:#eff6ff;border-color:#bfdbfe;color:#1e40af;}
+  .url{font-size:13px;color:#5f6b7e;background:#f6f8fc;border-radius:8px;padding:8px 10px;word-break:break-all;margin-top:6px;border:1px dashed #dbe3ef;}
+  .divider{height:1px;background:var(--bg);margin:22px 0;}
 </style>
 </head>
 <body>
@@ -33,21 +38,37 @@
   <a class="btn" id="dlBtn" href="截屏搜题.shortcut" download="截屏搜题.shortcut">⬇ 下载并导入快捷指令</a>
   <a class="btn ghost" href="shortcuts://create-shortcut">手动创建（不下载）</a>
 
-  <div style="margin-top:18px">
-    <div class="step"><span class="num">1</span><div>点上方按钮下载 <b>截屏搜题.shortcut</b>（Safari 打开本页）</div></div>
-    <div class="step"><span class="num">2</span><div>点击下载的文件 → 选 <b>「快捷指令」App</b> 打开</div></div>
-    <div class="step"><span class="num">3</span><div>点 <b>「添加快捷指令」</b>，完成</div></div>
-    <div class="step"><span class="num">4</span><div>做任何题时 <b>先截屏</b>，然后双击手机背面 / 喊 Siri「截屏搜题」/ 点快捷指令图标，自动出答案</div></div>
+  <div class="divider"></div>
+  <div style="font-size:14px;color:#1e40af;background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:12px 14px;line-height:1.7">
+    📱 <b>iOS 17 / 18 新系统说明</b>：系统已取消"允许不受信任的快捷指令"开关，但<b>导入共享快捷指令默认允许</b>，直接按下面步骤添加即可，无需任何设置。
   </div>
 
-  <div class="tip">
-    ⚠️ <b>首次添加提示"不受信任"</b>：去「设置 → 快捷指令 → 允许不受信任的快捷指令」打开一次开关，再回来添加即可。<br>
-    前提：已安装 <b>搜题平台 v2.3+</b>（App 图标为"100 考试"），否则链接打不开。
-  </div>
+  <h2>方式一：用文件导入（推荐，最快）</h2>
+  <div class="step"><span class="num">1</span><div>点上面蓝色按钮<b>下载 .shortcut 文件</b>（在 Safari 里打开本页）</div></div>
+  <div class="step"><span class="num">2</span><div>下载完成后，<b>点击下载的文件</b>，在弹窗里选 <b>「快捷指令」</b> App</div></div>
+  <div class="step"><span class="num">3</span><div>快捷指令 App 会显示预览（截屏 + 打开URL）→ 滑到底部点 <b>「添加快捷指令」</b></div></div>
+  <div class="step"><span class="num">4</span><div>完成！找到「截屏搜题」点一下即可测试（先随便截个屏）</div></div>
+  <div class="tip">⚠️ 若提示"此快捷指令无法打开/已损坏"（旧格式被 iOS 18 拒收）：<b>直接看下方方式二手动创建</b>，5 分钟搞定，效果完全一样。</div>
 
-  <div style="margin-top:16px">
-    <div style="font-size:13px;color:#5f6b7e">这个快捷指令做的事（等价于手动配置）：</div>
-    <div class="url">1. 截屏（Take Screenshot）<br>2. 打开 URL：searchbank://ocr-latest</div>
+  <h2>方式二：手动创建（iOS 18 最稳）</h2>
+  <div class="step"><span class="num">1</span><div>打开 <b>「快捷指令」</b> App → 右上角 <b>「+」</b> 新建</div></div>
+  <div class="step"><span class="num">2</span><div>点底部<b>「添加操作」</b> → 搜索 <b>「截屏」</b> → 点选 <b>「截屏」(Take Screenshot)</b></div></div>
+  <div class="step"><span class="num">3</span><div>再点<b>「添加操作」</b> → 搜索 <b>「打开 URL」</b> → 点选 <b>「打开 URL」(Open URL)</b></div></div>
+  <div class="step"><span class="num">4</span><div>在 URL 输入框里粘贴：<div class="url">searchbank://ocr-latest</div></div></div>
+  <div class="step"><span class="num">5</span><div>点右上角<b>「完成」</b> → 重命名为 <b>「截屏搜题」</b>（图标可自选）</div></div>
+  <div class="step"><span class="num">6</span><div><b>测试</b>：先随便截个屏，然后点「截屏搜题」→ 应自动跳到搜题平台并弹出答案</div></div>
+  <div class="tip blue">✅ 建好后可以在「快捷指令」里点该条右上角 <b>⋯</b> → <b>「添加 Siri」</b> 录一句"截屏搜题"；也可到 <b>设置 → 辅助功能 → 触控 → 背面轻点</b> 绑定双击/三击触发。</div>
+
+  <h2>方式三：分享给朋友（iCloud 链接）</h2>
+  <div class="step"><span class="num">1</span><div>在「快捷指令」列表<b>长按</b>「截屏搜题」→ 点<b>「分享」</b></div></div>
+  <div class="step"><span class="num">2</span><div>选 <b>「拷贝 iCloud 链接」</b>（或拷贝链接）——得到 https://www.icloud.com/shortcuts/xxxx</div></div>
+  <div class="step"><span class="num">3</span><div>把这个链接发给朋友 / 存到自己备忘录；对方在 iPhone 上点开 → 「添加快捷指令」即可，<b>换手机也靠这个链接恢复</b></div></div>
+
+  <div class="divider"></div>
+  <div style="font-size:13px;color:#5f6b7e;line-height:1.7">
+    这个快捷指令做的事（等价于手动配置）：<br>
+    <span class="url">1. 截屏（Take Screenshot）<br>2. 打开 URL：searchbank://ocr-latest</span><br>
+    前提：已安装<b>搜题平台 v2.3+</b>（图标为"100 考试"）。iOS 18 首次运行「打开 URL」会询问一次"允许打开此 App？"→ 选<b>始终允许</b>。
   </div>
 </div>
 </body>
