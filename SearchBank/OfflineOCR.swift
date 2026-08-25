@@ -38,7 +38,6 @@ enum OfflineOCR {
                     return
                 }
                 let text = observations
-                    .compactMap { $0 as? VNRecognizedText }
                     .compactMap { $0.topCandidates(1).first?.string }
                     .joined(separator: "\n")
                 completion(text)

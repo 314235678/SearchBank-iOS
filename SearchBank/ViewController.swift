@@ -113,7 +113,7 @@ class ViewController: UIViewController,
             return
         }
         OfflineOCR.recognize(base64: b64) { text in
-            respond(id: id, result: ["text": text ?? ""])
+            self.respond(id: id, result: ["text": text ?? ""])
         }
     }
 
