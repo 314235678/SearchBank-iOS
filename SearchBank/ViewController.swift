@@ -1,17 +1,25 @@
 import UIKit
 import WebKit
 import UniformTypeIdentifiers
+import PhotosUI
 
 /// 搜题平台 iOS 外壳：用 WKWebView 承载网页版全部功能，
 /// 通过名为 "bridge" 的 WKScriptMessageHandler 与网页 JS 通信，
-/// 提供：离线 OCR（Vision）、文件导入（DocumentPicker）、导出分享、
-///       本地数据持久化（LocalStore → Documents/SearchBank/data.json）、
-///       设备分级。
+/// 提供：离线 OCR（Vision）、文件导入（DocumentPicker）、系统相册选图（PHPicker）、
+///       拍照（UIImagePickerController）、导出分享、本地数据持久化
+///       （LocalStore → Documents/SearchBank/data.json）、设备分级。
 class ViewController: UIViewController,
                       WKScriptMessageHandler,
                       UIDocumentPickerDelegate,
                       UINavigationControllerDelegate,
-                      UIImagePickerControllerDelegate {
+                      UIImagePickerControllerDelegate,
+                      PHPickerViewControllerDelegate {
+
+    private var webView: WKWebView!
+    private var documentPickerResolve: (([[String: Any]]) -> Void)?
+    private var cameraResolve: ((String?) -> Void)?
+    private var openPanelResolve: (([URL]?) -> Void)?
+    private var photoPickerResolve: ((String?) -> Void)?
 
     private var webView: WKWebView!
     private var documentPickerResolve: (([[String: Any]]) -> Void)?
@@ -96,6 +104,54 @@ class ViewController: UIViewController,
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         let js = "window.__SB = window.__SB || {}; window.__SB.device = \(DeviceInfo.snapshotJSON());"
         webView.evaluateJavaScript(js, completionHandler: nil)
+        // 消费此前可能已收到的 URL scheme 唤醒（冷启动场景）
+        if let pending = pendingOpenURL {
+            consumeOpenURL(pending)
+            pendingOpenURL = nil
+        }
+    }
+
+    // 收到 URL scheme 唤醒（NotificationCenter 由 AppDelegate.post 触发）
+    private var pendingOpenURL: String?
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        setupWebView()
+        // 启动时确保 Documents 下的 data.json 在 Files App 可见
+        LocalStore.ensureFinderVisible()
+        // 监听 URL scheme 唤醒
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(handleOpenURL(_:)),
+            name: .searchBankOpenURL, object: nil)
+        loadApp()
+    }
+
+    @objc private func handleOpenURL(_ note: Notification) {
+        guard let s = note.userInfo?["url"] as? String else { return }
+        // WebView 还没就绪就先存起来，等 didFinish 再消费
+        if webView == nil {
+            pendingOpenURL = s
+        } else {
+            consumeOpenURL(s)
+        }
+    }
+
+    /// 把 URL 注入到 JS 端做处理：
+    ///   searchbank://fab-camera   → 触发 FAB 拍照
+    ///   searchbank://fab-album    → 触发 FAB 相册
+    ///   searchbank://fab-clip     → 触发 FAB 剪贴板
+    ///   searchbank://search?q=... → 直接搜题
+    private func consumeOpenURL(_ urlStr: String) {
+        // 简单转义后内联进 JS
+        let escaped = urlStr
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "'", with: "\\'")
+        let js = "if(window.__SB && window.__SB.handleDeepLink){window.__SB.handleDeepLink('\(escaped)');}else{window.__SB.__pendingURL='\(escaped)';}"
+        webView.evaluateJavaScript(js, completionHandler: nil)
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
 
     // MARK: - WKScriptMessageHandler（JS -> 原生）
@@ -124,6 +180,11 @@ class ViewController: UIViewController,
             handleDataPath(id: id)
         case "captureImage":
             handleCaptureImage(id: id)
+        case "pickImage":
+            handlePickImage(id: id)
+        case "processURL":
+            // URL scheme 唤醒参数处理：JS 端只需要 acknowledge
+            handleProcessURL(id: id, payload: payload)
         default:
             respond(id: id, result: ["error": "unknown type: \(type)"])
         }
@@ -238,6 +299,58 @@ class ViewController: UIViewController,
             return
         }
         respond(id: id, result: ["text": text])
+    }
+
+    // MARK: - 系统相册选图（PHPicker，替代 UIDocumentPicker；iOS 14+；无需照片权限）
+
+    /// 弹系统相册（PHPickerViewController），选完回 JPEG data URL 给 JS。
+    /// 替代 UIDocumentPicker：在 iOS 上 UIDocumentPicker 默认走"文件"App 视图，
+    /// 体验差；PHPicker 直接是系统相册，更符合用户预期。
+    private func handlePickImage(id: String) {
+        var config = PHPickerConfiguration(photoLibrary: .shared())
+        config.filter = .images
+        config.selectionLimit = 1
+        let picker = PHPickerViewController(configuration: config)
+        picker.delegate = self
+        picker.modalPresentationStyle = .formSheet
+        photoPickerResolve = { dataUrl in
+            self.respond(id: id, result: dataUrl.map { ["dataUrl": $0] } ?? ["error": "已取消"])
+        }
+        present(picker, animated: true, completion: nil)
+    }
+
+    // PHPickerViewControllerDelegate
+
+    func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
+        picker.dismiss(animated: true) {
+            let r = self.photoPickerResolve
+            self.photoPickerResolve = nil
+            guard let first = results.first else { r?(nil); return }
+            // PHPicker 不需要 photo library 授权（在沙箱外访问）
+            if first.itemProvider.canLoadObject(ofClass: UIImage.self) {
+                first.itemProvider.loadObject(ofClass: UIImage.self) { obj, err in
+                    DispatchQueue.main.async {
+                        let dataUrl: String?
+                        if let img = obj as? UIImage, let jpeg = img.jpegData(compressionQuality: 0.85) {
+                            dataUrl = "data:image/jpeg;base64," + jpeg.base64EncodedString()
+                        } else {
+                            dataUrl = nil
+                        }
+                        r?(dataUrl)
+                    }
+                }
+            } else {
+                r?(nil)
+            }
+        }
+    }
+
+    // MARK: - URL scheme 唤醒
+
+    /// JS 端 query 这个方法确认已经处理了 URL 唤醒参数。
+    /// 真正的 URL 解析在 AppDelegate 的 openURL 中完成，并通过 evaluateJavaScript 注入。
+    private func handleProcessURL(id: String, payload: [String: Any]) {
+        respond(id: id, result: ["ok": true])
     }
 
     // MARK: - 拍照（FAB 相机按钮使用）

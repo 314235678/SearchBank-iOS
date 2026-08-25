@@ -48,5 +48,18 @@
   <string>用于从相册选取题目图片，进行离线文字识别搜题</string>
   <key>NSPhotoLibraryAddUsageDescription</key>
   <string>用于把导出的题库备份保存到相册/文件</string>
+  <key>CFBundleURLTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleURLName</key>
+      <string>com.searchbank.app</string>
+      <key>CFBundleTypeRole</key>
+      <string>Editor</string>
+      <key>CFBundleURLSchemes</key>
+      <array>
+        <string>searchbank</string>
+      </array>
+    </dict>
+  </array>
 </dict>
 </plist>

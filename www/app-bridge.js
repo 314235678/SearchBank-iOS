@@ -86,6 +86,66 @@
     });
   };
 
+  /** 选图：弹系统相册 (PHPickerViewController)，返回 data URL；用户取消返回空串。 */
+  window.__SB.pickImage = function () {
+    return post("pickImage", {}).then(function (r) {
+      if (r && r.error) throw new Error(r.error);
+      return (r && r.dataUrl) || "";
+    });
+  };
+
+  /** URL scheme 唤醒确认（实际跳转逻辑由 AppDelegate/ViewController 通过注入 JS 完成）。 */
+  window.__SB.processURL = function (params) {
+    return post("processURL", { params: params || {} }).then(function (r) {
+      return !(r && r.error);
+    });
+  };
+
+  /**
+   * 解析 searchbank:// URL 并触发对应行为
+   *   searchbank://fab-camera       → 触发 FAB 拍照
+   *   searchbank://fab-album        → 触发 FAB 相册
+   *   searchbank://fab-clipboard    → 触发 FAB 剪贴板
+   *   searchbank://search?q=题干     → 直接搜题（跳到 search 视图并填入）
+   *   searchbank://launch           → 单纯打开
+   * 任何 page 加载完都可调
+   */
+  window.__SB.handleDeepLink = function (urlStr) {
+    try {
+      var u = new URL(urlStr);
+      var host = u.host || (u.pathname || "").replace(/^\/+/, "");
+      var params = {};
+      u.searchParams.forEach(function (v, k) { params[k] = v; });
+
+      function fireFAB(act) {
+        var btn = document.querySelector('.fab-btn[data-act="' + act + '"]');
+        if (btn) { btn.click(); return true; }
+        return false;
+      }
+
+      if (host === "fab-camera")      fireFAB("camera");
+      else if (host === "fab-album")  fireFAB("album");
+      else if (host === "fab-clipboard" || host === "fab-clip") fireFAB("clipboard");
+      else if (host === "search") {
+        if (typeof go === "function") go("search");
+        if (params.q) {
+          var inp = $("#searchInput"); if (inp) inp.value = params.q;
+          if (typeof doSearch === "function") doSearch();
+        }
+      } else if (host === "ocr" || host === "launch") {
+        if (typeof go === "function") go(host === "ocr" ? "ocr" : "home");
+      }
+    } catch (e) { console.warn("handleDeepLink failed", e); }
+  };
+
+  // 消费早于 __SB.handleDeepLink 注册前到达的 URL（冷启动时 didFinish 才注入）
+  if (window.__SB.__pendingURL) {
+    var pending = window.__SB.__pendingURL;
+    window.__SB.__pendingURL = null;
+    // 延后一帧，确保页面已绑定好事件
+    setTimeout(function () { window.__SB.handleDeepLink(pending); }, 0);
+  }
+
   window.__SB.device = window.__SB.device || {
     tier: "mid",
     isTablet: false,

@@ -668,8 +668,12 @@ let _mgCache=null; // 题库管理预计算缓存（数据变更时由 save() �
 let _mgSel=new Set(); // 题库管理-题目管理 批量勾选集合
 function save(){
   _mgCache=null;
-  try{localStorage.setItem(KEY,JSON.stringify(DATA));}
-  catch(e){toast("⚠ 浏览器缓存已满（可能含大量图片），本地备份写入失败；文件夹仍会尝试保存");}
+  // 原生 App（WKWebView）：localStorage 进程级缓存（关 App 即丢），不再写入；数据走 __SB.saveData 写到 App 沙盒文件
+  // 浏览器 / 普通网页：仍尝试写 localStorage（超 5MB 时弹 toast 提示）
+  if(!(window.__SB && window.__SB.native)){
+    try{localStorage.setItem(KEY,JSON.stringify(DATA));}
+    catch(e){toast("⚠ 浏览器缓存已满（可能含大量图片），本地备份写入失败；文件夹仍会尝试保存");}
+  }
   flushFolder();
 }
 function saveNow(){flushFolder(true);}
@@ -2157,6 +2161,40 @@ mResetOpts();
 /* ============ 图片识别 ============ */
 $("#imgDrop").addEventListener("click",()=>$("#imgInput").click());
 $("#imgInput").addEventListener("change",e=>{if(e.target.files[0])handleImage(e.target.files[0]);});
+// 原生 App：拦截 imgInput / imgDrop 点击，直接走 PHPicker 系统相册（避免 UIDocumentPicker 的"文件"视图）
+(function(){
+  function openImageViaBridge(){
+    if (!(window.__SB && window.__SB.native && typeof window.__SB.pickImage === "function")) return false;
+    window.__SB.pickImage().then(function (dataUrl){
+      if (!dataUrl) return;
+      // data URL → Blob → File，喂给 handleImage（与 file input 走同一路径）
+      try {
+        var arr = dataUrl.split(",");
+        var mime = (arr[0].match(/data:(.*?);base64/) || [])[1] || "image/jpeg";
+        var bin = atob(arr[1] || arr[0]);
+        var len = bin.length;
+        var u8 = new Uint8Array(len);
+        for (var i=0;i<len;i++) u8[i]=bin.charCodeAt(i);
+        var blob = new Blob([u8], {type: mime});
+        var file = new File([blob], "photo.jpg", {type: mime, lastModified: Date.now()});
+        handleImage(file);
+      } catch (e) { console.warn(e); toast("图片处理失败"); }
+    }).catch(function(e){ toast("选图失败：" + (e && e.message ? e.message : e)); });
+    return true;
+  }
+  var drop = document.getElementById("imgDrop");
+  if (drop) {
+    drop.addEventListener("click", function (ev) {
+      if (openImageViaBridge()) { ev.stopImmediatePropagation(); ev.preventDefault(); }
+    }, true);
+  }
+  var inp = document.getElementById("imgInput");
+  if (inp) {
+    inp.addEventListener("click", function (ev) {
+      if (openImageViaBridge()) { ev.stopImmediatePropagation(); ev.preventDefault(); }
+    }, true);
+  }
+})();
 ["dragover","dragenter"].forEach(ev=>$("#imgDrop").addEventListener(ev,e=>{e.preventDefault();$("#imgDrop").classList.add("over");}));
 ["dragleave","drop"].forEach(ev=>$("#imgDrop").addEventListener(ev,e=>{e.preventDefault();$("#imgDrop").classList.remove("over");}));
 $("#imgDrop").addEventListener("drop",e=>{const f=e.dataTransfer.files[0];if(f&&f.type.startsWith("image/"))handleImage(f);});
@@ -2549,24 +2587,28 @@ function buildList(f){
 }
 function startSession(o){
   const f={bankId:o.bankId,type:o.type,onlyWrong:o.onlyWrong,onlyHard:o.onlyHard};
+  // 重置旧 session 的 timer，避免上次倒计时还在跑
+  if(typeof S!=="undefined" && S && S.timer){clearInterval(S.timer);}
   let list=o.list||buildList(f);
   // 模拟考试按题型数量抽题（如果调用方没直接传入 list）
   if(!o.list&&o.exam&&o.examTypes&&o.examTypes.length&&o.typeCounts){
     let picked=[];
-    o.examTypes.forEach(t=>{
+    // 严格按 TYPES 顺序抽题（单选→多选→判断…），保证题型不乱
+    TYPES.forEach(t=>{
+      if(!o.examTypes.includes(t))return;
       const n=(o.typeCounts[t]||0);
       if(!n)return;
       const pool=list.filter(i=>i.type===t);
       if(pool.length){const shuffled=shuffle(pool.slice());picked=picked.concat(shuffled.slice(0,n));}
     });
     list=picked;
-    if(o.order==="rand")shuffle(list);
+    // 模拟考试题型有固定顺序，不再整体 shuffle
   }else if(!o.list){
     if(o.order==="rand")shuffle(list);
     if(o.limit)list=list.slice(0,o.limit);
   }
   if(!list.length){toast("没有符合条件的题目");return;}
-  S={list,idx:0,mode:o.mode,order:o.order,exam:!!o.exam,examMin:o.examMin||0,results:[],answered:{},startedAt:Date.now(),timeLeft:(o.examMin||0)*60,timer:null,bankId:f.bankId,type:f.type,onlyWrong:f.onlyWrong,onlyHard:f.onlyHard,limit:o.limit,examTypes:o.examTypes||null,typeCounts:o.typeCounts||null,scoreMap:o.scoreMap||{"单选题":1,"多选题":1,"判断题":1,"填空题":1,"简答题":1,"其他":1},passScore:o.passScore||0,totalScore:o.totalScore||list.length};
+  S={list,idx:0,mode:o.mode,order:o.order||"seq",exam:!!o.exam,examMin:o.examMin||0,results:[],answered:{},startedAt:Date.now(),timeLeft:(o.examMin||0)*60,timer:null,bankId:f.bankId,type:f.type,onlyWrong:f.onlyWrong,onlyHard:f.onlyHard,limit:o.limit,examTypes:o.examTypes||null,typeCounts:o.typeCounts||null,scoreMap:o.scoreMap||{"单选题":1,"多选题":1,"判断题":1,"填空题":1,"简答题":1,"其他":1},passScore:o.passScore||0,totalScore:o.totalScore||list.length};
   $("#trainHome").style.display="none";$("#trainPlay").style.display="";
   if(S.exam&&S.examMin){S.timer=setInterval(()=>{S.timeLeft--;updateTimer();if(S.timeLeft<=0){clearInterval(S.timer);finishSession();}},1000);}
   renderQuestion();
@@ -2763,7 +2805,9 @@ function openExamSetup(filter){
     const min=parseInt($("#exMin").value)||0;
     // 保存用户偏好
     const st=settings();st.examScoreMap=scoreMapOut;st.examPassScore=passScore;st.examMin=min;saveSettings(st);
-    closeMask();startSession(Object.assign({mode:"answer",order:"rand",exam:true,examMin:min,examTypes:types,typeCounts,scoreMap:scoreMapOut,passScore,totalScore},filter));
+    closeMask();
+    // 注意：模拟考试题型有固定顺序（单选→多选→判断→填空→简答），不洗牌
+    startSession(Object.assign({mode:"answer",order:"seq",exam:true,examMin:min,examTypes:types,typeCounts,scoreMap:scoreMapOut,passScore,totalScore},filter));
   };
   showMask();
 }
@@ -3481,14 +3525,11 @@ $("#ppBank").addEventListener("change",()=>{renderPPTypeRows();ppState=null;rend
     fabPop.classList.remove("on");
     var act = btn.getAttribute("data-act");
     if (act === "album") {
-      // 原生环境：走 __SB.pickFiles（UIDocumentPicker，可多选）
-      if (window.__SB && window.__SB.native && typeof window.__SB.pickFiles === "function") {
-        window.__SB.pickFiles().then(function (files) {
-          if (files && files.length) {
-            var f0 = files[0];
-            runNativeFileOcr(f0.data, f0.mime, "fabAlbum");
-          }
-        }).catch(function () { toast("选择文件失败"); });
+      // 原生环境：走 __SB.pickImage（PHPicker，直接系统相册）
+      if (window.__SB && window.__SB.native && typeof window.__SB.pickImage === "function") {
+        window.__SB.pickImage().then(function (dataUrl) {
+          if (dataUrl) runNativeBase64Ocr(dataUrl, "fabAlbum");
+        }).catch(function (e) { toast("选图失败：" + (e && e.message ? e.message : e)); });
       } else {
         // 浏览器降级：file input
         fabFile.removeAttribute("capture");
