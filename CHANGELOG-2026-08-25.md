@@ -13,6 +13,7 @@
 - ③ app-bridge.js 加 `__SB.stripOptions(text)`：按行扫描定位到第一个 "A./A、/A:" 选项处截断
 - 「识别并搜题」按下时若开启剥离开关→ 先 stripOptions→再送入搜索栏，搜索栏因是 textarea 自动撑高，题干完整可见方便用户再次手工清理
 - 备注：v2.5 已经实现了 OCR 图片删除按钮（ocrDelImg）、搜索×清空按钮、滑动动画、紧凑化，本版本确认保留并扩展
+- 交付：commit `314d0c3`（+docs `d2fa295`）已推送到 GitHub main；Actions run `32858085100` 构建中；产物 SearchBank-v2.6.ipa
 
 ## 8. v2.4 构建交付（2026-08-25 20:05）—— 已推送 + IPA 已出
 
