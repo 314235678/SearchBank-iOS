@@ -35,8 +35,15 @@
   <h1>截屏搜题 · 快捷指令</h1>
   <div class="sub">在任何 App 里截屏 → 自动打开搜题平台 → 识别并显示答案</div>
 
-  <a class="btn" id="dlBtn" href="截屏搜题.shortcut" download="截屏搜题.shortcut">⬇ 下载并导入快捷指令</a>
+  <a class="btn" id="dlBtn" href="截屏搜题.shortcut" download="截屏搜题.shortcut">⬇ 下载「截屏搜题」（App 内识别）</a>
+  <a class="btn green" id="dlBtn2" href="截屏提取文字搜题.shortcut" download="截屏提取文字搜题.shortcut">⬇ 下载「截屏提取文字搜题」（系统 OCR 更准）</a>
   <a class="btn ghost" href="shortcuts://create-shortcut">手动创建（不下载）</a>
+
+  <div class="divider"></div>
+  <div style="font-size:14px;color:#14532d;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:12px 14px;line-height:1.7">
+    🎯 <b>推荐用绿色按钮的「截屏提取文字搜题」</b>：它使用 iOS 系统自带的"实况文本"OCR 引擎（和相册/相机里"拷贝文本"同一套，识别率最高、支持离线），
+    把截屏里的文字提取出来 → 复制到剪贴板 → 打开搜题平台 → 自动粘贴搜索。对红色背景等难题识别比 App 内 OCR 更稳。
+  </div>
 
   <div class="divider"></div>
   <div style="font-size:14px;color:#1e40af;background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:12px 14px;line-height:1.7">
@@ -44,32 +51,33 @@
   </div>
 
   <h2>方式一：用文件导入（推荐，最快）</h2>
-  <div class="step"><span class="num">1</span><div>点上面蓝色按钮<b>下载 .shortcut 文件</b>（在 Safari 里打开本页）</div></div>
+  <div class="step"><span class="num">1</span><div>点上面<b>绿色按钮</b>下载「截屏提取文字搜题」.shortcut（在 Safari 里打开本页）</div></div>
   <div class="step"><span class="num">2</span><div>下载完成后，<b>点击下载的文件</b>，在弹窗里选 <b>「快捷指令」</b> App</div></div>
-  <div class="step"><span class="num">3</span><div>快捷指令 App 会显示预览（截屏 + 打开URL）→ 滑到底部点 <b>「添加快捷指令」</b></div></div>
-  <div class="step"><span class="num">4</span><div>完成！找到「截屏搜题」点一下即可测试（先随便截个屏）</div></div>
+  <div class="step"><span class="num">3</span><div>快捷指令 App 会显示预览（截屏 + 提取文本 + 复制到剪贴板 + 打开URL）→ 滑到底部点 <b>「添加快捷指令」</b></div></div>
+  <div class="step"><span class="num">4</span><div>完成！找到「截屏提取文字搜题」点一下即可测试（先随便截个屏）</div></div>
   <div class="tip">⚠️ 若提示"此快捷指令无法打开/已损坏"（旧格式被 iOS 18 拒收）：<b>直接看下方方式二手动创建</b>，5 分钟搞定，效果完全一样。</div>
 
-  <h2>方式二：手动创建（iOS 18 最稳）</h2>
+  <h2>方式二：手动创建（iOS 18 最稳，系统 OCR 版）</h2>
   <div class="step"><span class="num">1</span><div>打开 <b>「快捷指令」</b> App → 右上角 <b>「+」</b> 新建</div></div>
   <div class="step"><span class="num">2</span><div>点底部<b>「添加操作」</b> → 搜索 <b>「截屏」</b> → 点选 <b>「截屏」(Take Screenshot)</b></div></div>
-  <div class="step"><span class="num">3</span><div>再点<b>「添加操作」</b> → 搜索 <b>「打开 URL」</b> → 点选 <b>「打开 URL」(Open URL)</b></div></div>
-  <div class="step"><span class="num">4</span><div>在 URL 输入框里粘贴：<div class="url">searchbank://ocr-latest</div></div></div>
-  <div class="step"><span class="num">5</span><div>点右上角<b>「完成」</b> → 重命名为 <b>「截屏搜题」</b>（图标可自选）</div></div>
-  <div class="step"><span class="num">6</span><div><b>测试</b>：先随便截个屏，然后点「截屏搜题」→ 应自动跳到搜题平台并弹出答案</div></div>
-  <div class="tip blue">✅ 建好后可以在「快捷指令」里点该条右上角 <b>⋯</b> → <b>「添加 Siri」</b> 录一句"截屏搜题"；也可到 <b>设置 → 辅助功能 → 触控 → 背面轻点</b> 绑定双击/三击触发。</div>
+  <div class="step"><span class="num">3</span><div>再点<b>「添加操作」</b> → 搜索 <b>「从图像中提取文本」</b> → 点选 <b>「从图像中提取文本」(Extract Text from Image)</b>（系统实况文本 OCR，识别率最高）</div></div>
+  <div class="step"><span class="num">4</span><div>再点<b>「添加操作」</b> → 搜索 <b>「拷贝到剪贴板」</b> → 点选 <b>「拷贝到剪贴板」(Copy to Clipboard)</b></div></div>
+  <div class="step"><span class="num">5</span><div>再点<b>「添加操作」</b> → 搜索 <b>「打开 URL」</b> → URL 粘贴：<div class="url">searchbank://fab-clipboard</div></div></div>
+  <div class="step"><span class="num">6</span><div>点右上角<b>「完成」</b> → 重命名为 <b>「截屏提取文字搜题」</b></div></div>
+  <div class="step"><span class="num">7</span><div><b>测试</b>：先随便截个屏，点「截屏提取文字搜题」→ 自动提取文字 → 跳到搜题平台 → 自动粘贴搜索 → 弹答案卡</div></div>
+  <div class="tip blue">✅ 想要"敲两下背面就全自动"：设置 → 辅助功能 → 触控 → <b>背面轻点</b> → 选「双击」→ 滑到最下选 <b>「截屏提取文字搜题」</b>。<br>以后做题时敲两下手机背面 → 自动截屏 → 自动识别 → 自动搜题，全程零手动。</div>
 
   <h2>方式三：分享给朋友（iCloud 链接）</h2>
-  <div class="step"><span class="num">1</span><div>在「快捷指令」列表<b>长按</b>「截屏搜题」→ 点<b>「分享」</b></div></div>
+  <div class="step"><span class="num">1</span><div>在「快捷指令」列表<b>长按</b>要分享的快捷指令 → 点<b>「分享」</b></div></div>
   <div class="step"><span class="num">2</span><div>选 <b>「拷贝 iCloud 链接」</b>（或拷贝链接）——得到 https://www.icloud.com/shortcuts/xxxx</div></div>
   <div class="step"><span class="num">3</span><div>把这个链接发给朋友 / 存到自己备忘录；对方在 iPhone 上点开 → 「添加快捷指令」即可，<b>换手机也靠这个链接恢复</b></div></div>
 
   <div class="divider"></div>
   <h2>⚡ 重点：全自动"敲两下截屏搜题"怎么配</h2>
-  <div class="step"><span class="num">1</span><div><b>确认快捷指令里有「截屏」动作</b>：点开「截屏搜题」→ 编辑，必须看到<b>两个动作</b>：① 截屏（Take Screenshot）② 打开 URL（searchbank://ocr-latest）。<b>如果只有②没有①，就补上①</b>——这正是"为什么现在要手动截图"的原因。</div></div>
-  <div class="step"><span class="num">2</span><div><b>绑定背面轻点</b>：设置 → 辅助功能 → 触控 → <b>背面轻点</b> → 选「双击」（或三击）→ 滑到最下选 <b>「截屏搜题」</b></div></div>
-  <div class="step"><span class="num">3</span><div>完成后做题时：<b>敲两下手机背面</b> → 系统自动截屏（无需手按）→ 自动打开搜题平台 → 自动读刚截的图 → 自动识别 → 自动搜题 → 自动弹出答案卡 ✓</div></div>
-  <div class="tip blue">✅ 全链路：<b>敲两下 → 自动截屏 → 自动跳转 → 自动识别 → 自动搜题 → 自动显示答案</b>，全程零手动。<br>首次数码：系统会询问"截屏搜题 要打开 搜题平台 吗？"→ 选<b>始终允许</b>，之后不再问。</div>
+  <div class="step"><span class="num">1</span><div><b>确认快捷指令动作完整</b>：「截屏提取文字搜题」应有<b>四个动作</b>：① 截屏 ② 从图像中提取文本 ③ 拷贝到剪贴板 ④ 打开 URL（searchbank://fab-clipboard）。<b>缺哪个补哪个</b>。</div></div>
+  <div class="step"><span class="num">2</span><div><b>绑定背面轻点</b>：设置 → 辅助功能 → 触控 → <b>背面轻点</b> → 选「双击」（或三击）→ 滑到最下选 <b>「截屏提取文字搜题」</b></div></div>
+  <div class="step"><span class="num">3</span><div>完成后做题时：<b>敲两下手机背面</b> → 系统自动截屏（无需手按）→ 系统实况文本识别 → 自动打开搜题平台 → 自动粘贴 → 自动搜题 → 自动弹出答案卡 ✓</div></div>
+  <div class="tip blue">✅ 全链路：<b>敲两下 → 自动截屏 → 系统OCR提取 → 自动粘贴 → 自动搜题 → 自动显示答案</b>，全程零手动。<br>首次数码：系统会询问"要打开 搜题平台 吗？"→ 选<b>始终允许</b>；搜题平台会询问"允许读取剪贴板吗？"→ 选<b>允许</b>（仅用于自动搜题）。</div>
 
   <h2 style="color:#b45309">⚠️ 关于"不跳转、直接在原做题 App 里显示答案"</h2>
   <div style="font-size:14px;line-height:1.8;color:#333;background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:12px 14px">
