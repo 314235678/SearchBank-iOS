@@ -64,8 +64,24 @@ rm -f  "Payload/SearchBank.app/CodeResources" 2>/dev/null || true
 # 确保可执行文件权限正确
 chmod +x "Payload/SearchBank.app/SearchBank" 2>/dev/null || true
 
-# IPA 本质是一个 zip
-zip -r -y SearchBank.ipa Payload >/dev/null
+# IPA 本质是一个 zip；用 Python 打包，确保含中文的文件名（如 搜题题库.json）
+# 写入 UTF-8 标志位（EFS flag），避免部分解压工具（如 Windows 上的 Sideloadly）
+# 把中文文件名解成乱码导致内置题库加载失败。
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "ERROR: 需要 python3 来打包 IPA"
+  exit 1
+fi
+python3 - <<'PY'
+import os, zipfile
+base = 'Payload'
+out = 'SearchBank.ipa'
+with zipfile.ZipFile(out, 'w', zipfile.ZIP_DEFLATED) as z:
+    for root, dirs, files in os.walk(base):
+        for f in files:
+            p = os.path.join(root, f)
+            arc = os.path.relpath(p, os.path.dirname(base))  # Payload/SearchBank.app/...
+            z.write(p, arc)
+PY
 
 echo "==> [5/5] 完成"
 IPA_SIZE=$(du -h SearchBank.ipa | cut -f1)
