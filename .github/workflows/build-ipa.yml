@@ -29,9 +29,10 @@ jobs:
           echo "已安装的模拟器运行时："
           xcrun simctl runtime list || true
           echo "==> 下载与当前 SDK 匹配的 iOS 模拟器运行时 ..."
-          # 先试免 sudo，失败再用 sudo；下载需联网且占用数 GB 空间
-          xcodebuild -downloadPlatform iOS -architectureVariant arm64 2>&1 \
-            || sudo xcodebuild -downloadPlatform iOS -architectureVariant arm64 2>&1 \
+          # 下载与当前 SDK 匹配的 iOS 模拟器运行时（不写 -architectureVariant，那个参数只对部分子命令有效，
+          # 在新版 xcodebuild 的 -downloadPlatform 下会报 "invalid option" 直接拒绝）
+          xcodebuild -downloadPlatform iOS 2>&1 \
+            || sudo xcodebuild -downloadPlatform iOS 2>&1 \
             || echo "WARN: 运行时下载失败，继续尝试（可能 ODR 关闭已规避 thinned 变体）"
           echo "==> 下载后运行时列表："
           xcrun simctl runtime list || true
