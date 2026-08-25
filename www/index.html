@@ -4456,6 +4456,7 @@ $("#ppBank").addEventListener("change",()=>{renderPPTypeRows();ppState=null;rend
   <div class="ans-float-head">
     <span class="pill" id="ansPill">匹配</span>
     <span class="hand" id="ansHand">题干摘要</span>
+    <button class="expand" id="ansCopyAns" type="button" title="复制最佳答案到剪贴板" style="background:#ecfdf5;color:#16a34a;border:1px solid #bbf7d0">📋 复制答案</button>
     <button class="expand" id="ansExpand" type="button">查看全部</button>
     <button class="close" id="ansClose" type="button" aria-label="关闭">×</button>
   </div>
@@ -4978,6 +4979,31 @@ $("#ppBank").addEventListener("change",()=>{renderPPTypeRows();ppState=null;rend
     closeAns();
     if (typeof go === "function") go("search");
   });
+
+  // v2.13：复制答案按钮 → 把最匹配题目的正确答案写回剪贴板
+  var ansCopyAns = document.getElementById("ansCopyAns");
+  if(ansCopyAns){
+    ansCopyAns.addEventListener("click", async function(){
+      try{
+        // 找到 ansBody 里的第一张 qcard
+        var firstCard=ansBody && ansBody.querySelector(".qcard");
+        if(!firstCard){toast("没有答案可复制");return;}
+        // 答案 chip 文本
+        var ansTag=firstCard.querySelector(".tag[style*='background:#ecfdf5']") || firstCard.querySelector(".tag");
+        var a=ansTag?ansTag.textContent.replace(/^答案\s*/,"").trim():"";
+        if(!a){toast("未找到答案");return;}
+        if(window.__SB && typeof window.__SB.writeClipboard==="function"){
+          await window.__SB.writeClipboard(a);
+          toast("已复制答案 "+a+" 到剪贴板");
+        }else if(navigator.clipboard){
+          await navigator.clipboard.writeText(a);
+          toast("已复制答案 "+a+" 到剪贴板");
+        }else{
+          toast("剪贴板不可用");
+        }
+      }catch(e){toast("复制失败："+(e&&e.message?e.message:e));}
+    });
+  }
 
   // FAB loading
   function showLoading(on) { loading.classList.toggle("on", !!on); }

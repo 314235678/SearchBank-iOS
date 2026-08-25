@@ -7,7 +7,7 @@ on:
 
 jobs:
   build:
-    runs-on: macos-latest   # 必须 macOS：只有它有 Xcode / iOS SDK 才能编译出 arm64 二进制
+    runs-on: macos-14        # v2.13 改用 macos-14 队列（macos-latest 临时不可用/排队过长）
     steps:
       - name: Checkout
         uses: actions/checkout@v4
