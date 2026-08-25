@@ -3143,6 +3143,9 @@ function syncOcrSettings(){
   var maxEdge=parseInt(($("#optMaxEdge")?$("#optMaxEdge").value:"1600"),10)||0;
   window.__SB.setSetting("sb_ocr_whiten_red",whiten);
   window.__SB.setSetting("sb_ocr_max_edge",maxEdge);
+  // v2.10：分区域识别默认关闭（避免红色题目卡被切），JS 同步一份
+  window.__SB.setSetting("sb_ocr_split",false);
+  window.__SB.setSetting("sb_ocr_enhance",true);
 }
 bindOcrAdvOptions();
 syncOcrSettings();

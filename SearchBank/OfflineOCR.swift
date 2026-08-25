@@ -78,25 +78,28 @@ enum OfflineOCR {
             return cropped
         }()
 
-        // 5) 分区域识别：把图按高度切成上下两半，分别跑 Vision，再合并（大图降采样会丢小字，
-        //    半图分辨率相对更高；红色界面卡片居中也更容易命中）
-        let regions: [CGImage] = splitRegions
-            ? splitIntoRegions(cgImage: processed, parts: 2)
-            : [processed]
+        // 5) 分区域识别：v2.10 修复——25% 重叠避免切到题目卡 + Y 坐标绝对化正确合并
+        //    注意：v2.10 默认 split=false（避免红色界面被错误切分）
+        let regions: [(image: CGImage, yOffset: Int, regionH: Int, totalH: Int)] = splitRegions
+            ? splitIntoRegions(cgImage: processed, parts: 2, overlapRatio: 0.25)
+            : [(processed, 0, processed.height, processed.height)]
 
         DispatchQueue.global(qos: .userInitiated).async {
-            var allLines: [[(text: String, y: CGFloat)]] = []
-            for region in regions {
-                guard let result = recognizeRegion(cgImage: region, multicand: multicand) else {
+            var allLines: [(text: String, yAbs: CGFloat)] = []
+            for r in regions {
+                guard let result = recognizeRegion(cgImage: r.image, multicand: multicand) else {
                     continue
                 }
-                allLines.append(result)
+                // v2.10 修复：把每个 observation 的归一化 y 转换为**原图绝对 y 坐标**
+                //   否则上半区底部的"题干末行"会错误地排在 下半区顶部"选项首行" 之前/之后
+                let yBase = CGFloat(r.yOffset) / CGFloat(r.totalH)
+                let yScale = CGFloat(r.regionH) / CGFloat(r.totalH)
+                for (text, yLocal) in result {
+                    let yAbs = yBase + yLocal * yScale
+                    allLines.append((text: text, yAbs: yAbs))
+                }
             }
-            // 合并所有区域的行（Vision 坐标是左下原点，y 越大越靠上）
-            var merged = allLines.flatMap { $0 }
-            merged.sort { $0.y > $1.y }
-            // 合并成"行"（单栏-无换行：同行用空格）
-            let lines = groupObservationsByLine(merged.map { $0.text }, yValues: merged.map { $0.y })
+            let lines = groupObservationsByLine(allLines.map { $0.text }, yValues: allLines.map { $0.yAbs })
             completion(lines.joined(separator: "\n"))
         }
     }
@@ -140,21 +143,25 @@ enum OfflineOCR {
     }
 
     /// 把图按高度切成 N 份（每份独立识别，避免大图降采样丢小字）
-    private static func splitIntoRegions(cgImage: CGImage, parts: Int) -> [CGImage] {
+    /// v2.10：加 25% 重叠，避免题目卡恰好被切在中间（上半区只剩题干、下半区只剩选项）；
+    /// 返回每块在原图中的 yOffset 偏移和高度，供合并时把 y 转成绝对坐标
+    private static func splitIntoRegions(cgImage: CGImage, parts: Int, overlapRatio: Double) -> [(image: CGImage, yOffset: Int, regionH: Int, totalH: Int)] {
         let w = cgImage.width
         let h = cgImage.height
-        guard parts > 1, h > 200 else { return [cgImage] }
+        guard parts > 1, h > 200 else { return [(cgImage, 0, h, h)] }
         let partH = h / parts
-        var regions: [CGImage] = []
+        let overlap = min(partH / 2, Int(Double(partH) * overlapRatio))  // 重叠不超过一半
+        var regions: [(image: CGImage, yOffset: Int, regionH: Int, totalH: Int)] = []
         for i in 0..<parts {
-            let y = i * partH
-            let height = (i == parts - 1) ? (h - y) : partH
+            let yStart = max(0, i * partH - (i > 0 ? overlap : 0))
+            let yEnd = (i == parts - 1) ? h : ((i + 1) * partH + overlap)
+            let height = yEnd - yStart
             if height < 20 { continue }
-            if let r = cgImage.cropping(to: CGRect(x: 0, y: y, width: w, height: height)) {
-                regions.append(r)
+            if let r = cgImage.cropping(to: CGRect(x: 0, y: yStart, width: w, height: height)) {
+                regions.append((r, yStart, height, h))
             }
         }
-        return regions.isEmpty ? [cgImage] : regions
+        return regions.isEmpty ? [(cgImage, 0, h, h)] : regions
     }
 
     /// 按 Y 坐标把 (文本, y) 分组为"行"：y 接近（高度 60% 容差）归同一行，同行内用空格拼接。

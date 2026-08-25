@@ -238,11 +238,14 @@ class ViewController: UIViewController,
         let whiten = defaults.object(forKey: "sb_ocr_whiten_red") as? Bool ?? true
         let maxEdge = defaults.object(forKey: "sb_ocr_max_edge") as? Int ?? 1600
         let enhance = defaults.object(forKey: "sb_ocr_enhance") as? Bool ?? true
-        let split = defaults.object(forKey: "sb_ocr_split") as? Bool ?? true
+        // v2.10 重要：分区域识别默认【关闭】——v2.9 的 50/50 硬切会把题目卡（学习强企红色界面）切成两半，
+        //   导致只识别出选项/题干丢失。改为整图识别 + 预处理（白化/灰度/锐化）最稳。
+        let split = defaults.object(forKey: "sb_ocr_split") as? Bool ?? false
         let multicand = defaults.object(forKey: "sb_ocr_multicand") as? Bool ?? false
-        // v2.7 注释：4% 顶/底 = 1179×2556 截屏上 ~100px，刚好去掉状态栏+灵动岛
+        // iPhone 15 (1179×2556) 顶部灵动岛+状态栏 ≈ 177px ≈ 6.9% 高；
+        // 顶部裁 5% (128px) 去掉状态栏/灵动岛，又不会切到题目卡（学习强企题卡从 ~200px 开始）
         OfflineOCR.recognize(base64: b64,
-                             cropHeaderPct: 0.04,
+                             cropHeaderPct: 0.05,
                              cropFooterPct: 0.04,
                              whitenRedBg: whiten,
                              maxEdge: maxEdge,
