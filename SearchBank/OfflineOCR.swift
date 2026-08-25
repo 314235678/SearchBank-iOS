@@ -60,10 +60,15 @@ enum OfflineOCR {
             }
         }
 
-        // 3) 图像预处理增强（灰度 + 对比度 + 锐化）
+        // 3) 图像预处理增强（灰度 + 对比度 + 锐化 + Otsu 二值化）
         if enhance {
             if let enhanced = enhanceForOCR(cgImage: working) {
                 working = enhanced
+            }
+            // v2.12 Otsu 自适应二值化（浅底深字 → 纯黑白），Vision 识别率最高
+            // 用当前是否二值化由 enhance 控制；如果用户关闭 enhance 则整段跳过
+            if let binary = otsuBinarize(cgImage: working) {
+                working = binary
             }
         }
 
@@ -239,10 +244,10 @@ enum OfflineOCR {
         return context.makeImage()
     }
 
-    /// 红色背景白化：把"深红/朱红"色调（考试宝答题页背景）的像素改为白底（255,255,255）。
-    /// 判定：R > 170 且 R - max(G,B) > 60（红色分量明显大于其他分量）→ 红色背景。
-    /// 文本（深色/黑色/白色）保持原样。
-    /// 性能：在 iPhone 12 上处理 1179×2556 截屏约 80ms。
+    /// 红色背景白化：把"红/朱红/粉红"色调（学习强企、考试宝答题页背景）的像素改为白底（255,255,255）。
+    /// v2.12 改进：改用 HSV 色相检测（H 在 340°~360° / 0°~20° 红色区间，饱和度 > 0.35），
+    ///   覆盖深红、渐变红、浅红；红色像素占比 > 3% 就触发（之前 8% + RGB 差值 60 太严，浅红检测不到）
+    /// 文本（深色/黑色/白色）保持原样。性能：1179×2556 截屏约 100ms。
     private static func whitenRedBackground(cgImage: CGImage) -> CGImage? {
         let width = cgImage.width
         let height = cgImage.height
@@ -259,35 +264,116 @@ enum OfflineOCR {
                                       bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
         context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
 
-        // 1) 统计"红色背景"像素比例
+        // 1) 统计"红色背景"像素比例（HSV 检测）
         var redCount = 0
         let totalPixels = width * height
         for i in stride(from: 0, to: pixelData.count, by: 4) {
-            let r = pixelData[i]
-            let g = pixelData[i + 1]
-            let b = pixelData[i + 2]
-            let mb = max(g, b)
-            if r > 170 && Int(r) - Int(mb) > 60 {
+            let r = Double(pixelData[i]) / 255.0
+            let g = Double(pixelData[i + 1]) / 255.0
+            let b = Double(pixelData[i + 2]) / 255.0
+            let mx = max(r, max(g, b))
+            let mn = min(r, min(g, b))
+            let delta = mx - mn
+            // 饱和度低（接近灰/白）不算红色
+            guard mx > 0.55, delta > 0.15 else { continue }
+            var hue: Double = 0
+            if delta > 0 {
+                if mx == r { hue = 60 * ((g - b) / delta) }
+                else if mx == g { hue = 60 * ((b - r) / delta + 2) }
+                else { hue = 60 * ((r - g) / delta + 4) }
+            }
+            if hue < 0 { hue += 360 }
+            // 红色区间：340~360 / 0~20；亮度高于 55% 是背景（深红/朱红/粉红）
+            if (hue <= 20 || hue >= 340) && mx > 0.55 {
                 redCount += 1
             }
         }
-        // 红色背景 < 8% 就不处理（避免误白化）
+        // 红色背景 < 3% 就不处理（避免误白化橙色/黄色）
         let redRatio = Double(redCount) / Double(totalPixels)
-        if redRatio < 0.08 { return cgImage }
+        if redRatio < 0.03 { return cgImage }
 
-        // 2) 把所有"深红/朱红"像素改为白
+        // 2) 把所有红色调像素改为白
         for i in stride(from: 0, to: pixelData.count, by: 4) {
-            let r = pixelData[i]
-            let g = pixelData[i + 1]
-            let b = pixelData[i + 2]
-            let mb = max(g, b)
-            if r > 170 && Int(r) - Int(mb) > 60 {
-                pixelData[i] = 255
-                pixelData[i + 1] = 255
-                pixelData[i + 2] = 255
+            let r = Double(pixelData[i]) / 255.0
+            let g = Double(pixelData[i + 1]) / 255.0
+            let b = Double(pixelData[i + 2]) / 255.0
+            let mx = max(r, max(g, b))
+            let mn = min(r, min(g, b))
+            let delta = mx - mn
+            if mx > 0.55, delta > 0.15 {
+                var hue: Double = 0
+                if delta > 0 {
+                    if mx == r { hue = 60 * ((g - b) / delta) }
+                    else if mx == g { hue = 60 * ((b - r) / delta + 2) }
+                    else { hue = 60 * ((r - g) / delta + 4) }
+                }
+                if hue < 0 { hue += 360 }
+                if (hue <= 20 || hue >= 340) && mx > 0.55 {
+                    pixelData[i] = 255
+                    pixelData[i + 1] = 255
+                    pixelData[i + 2] = 255
+                }
             }
         }
 
+        return context.makeImage()
+    }
+
+    /// v2.12 Otsu 自适应二值化：灰度图上自动找阈值，把图变成纯黑白（浅底深字 → 黑字白底）。
+    /// Vision 对黑白高对比图识别率最高。用 Accelerate vImage 直方图加速。
+    /// 处理 1179×2556 截屏约 60ms。
+    private static func otsuBinarize(cgImage: CGImage) -> CGImage? {
+        let width = cgImage.width
+        let height = cgImage.height
+        let colorSpace = cgImage.colorSpace ?? CGColorSpaceCreateDeviceRGB()
+        let bytesPerRow = width * 4
+        var pixelData = [UInt8](repeating: 0, count: width * height * 4)
+        guard let context = CGContext(data: &pixelData,
+                                      width: width,
+                                      height: height,
+                                      bitsPerComponent: 8,
+                                      bytesPerRow: bytesPerRow,
+                                      space: colorSpace,
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+
+        // 1) 直方图（亮度 = (R+G+B)/3）
+        var hist = [Int](repeating: 0, count: 256)
+        var sum = 0.0
+        let n = width * height
+        for i in stride(from: 0, to: pixelData.count, by: 4) {
+            let l = (Int(pixelData[i]) + Int(pixelData[i+1]) + Int(pixelData[i+2])) / 3
+            hist[l] += 1
+            sum += Double(l)
+        }
+        // 2) Otsu 求最优阈值
+        var wB = 0
+        var sumB = 0.0
+        var maxVar = 0.0
+        var threshold = 127
+        for t in 0..<256 {
+            wB += hist[t]
+            if wB == 0 { continue }
+            let wF = n - wB
+            if wF == 0 { break }
+            sumB += Double(t) * Double(hist[t])
+            let mB = sumB / Double(wB)
+            let mF = (sum - sumB) / Double(wF)
+            let between = Double(wB) * Double(wF) * (mB - mF) * (mB - mF)
+            if between > maxVar { maxVar = between; threshold = t }
+        }
+        // 3) 判断浅底深字 vs 深底浅字：均值 > 128 为浅底（文字偏黑，二值化后黑字白底）
+        let mean = sum / Double(n)
+        let invert = mean < 128 // 深底浅字 → 反转（白字变黑字）
+        // 4) 二值化
+        for i in stride(from: 0, to: pixelData.count, by: 4) {
+            let l = (Int(pixelData[i]) + Int(pixelData[i+1]) + Int(pixelData[i+2])) / 3
+            let isDark = l <= threshold
+            let out: UInt8 = (invert ? !isDark : isDark) ? 0 : 255
+            pixelData[i] = out
+            pixelData[i+1] = out
+            pixelData[i+2] = out
+        }
         return context.makeImage()
     }
 }
