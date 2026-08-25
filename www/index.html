@@ -1540,7 +1540,29 @@ function scoreItem(c,qn){
   if(A.includes(qn))s+=2;
   if(N.includes(qn))s+=1;
   if(C.includes(qn))s+=1;
+  // 【v2.16 核心】3-gram 相似度：原题"煤矿/钻孔/预抽/煤层/瓦斯"等字符三元组
+  //   和命中题重合度，避免 80 道"《XX规程》...规定"题同分（之前 80+ 道都被 includes 命中同分）
+  if(qn.length>=6){
+    const ngram=ngram3Sim(Q,qn);
+    if(ngram>=0.3) s += 20*ngram*STEM_W;  // 0.3~1.0 → 加 12~40 分
+  }
   return s;
+}
+
+// v2.16：3-gram 字符相似度。把 query 切成连续的 3 字窗口（去停用词前后缀），
+//   统计多少比例出现在 haystack 中。原题命中 80%+，通用词命中 10-20%，
+//   把 746 道匹配题精准拉开。
+function ngram3Sim(hay,qn){
+  if(!hay || !qn || qn.length<6)return 0;
+  let hits=0,total=0;
+  for(let i=0;i+3<=qn.length;i++){
+    const g = qn.slice(i,i+3);
+    if(/[的了在是不有和与等为也之但而或又所这那这本个些于到从以及对以可不可没把被是法规规定]/.test(g))continue; // 跳过停用 3-gram
+    total++;
+    if(hay.indexOf(g)>=0) hits++;
+  }
+  if(total<3)return 0;
+  return hits/total;
 }
   // v2.9 分块搜索：长查询（OCR 全文/长题干）切成 4-6 字滑窗块，每块单独评分取最高，
   //   一个错字只影响相邻块，不再因 1-2 个错字整段 miss
@@ -1566,7 +1588,9 @@ function scoreItem(c,qn){
   function chunkQuery(q){
     if(!q)return [];
     if(q.length<=10)return [q];
-    const win=6, step=3;
+    // v2.16：用户反馈 win=6 太短，命中"治理举措""严肃问责"这种 4 字关键词时跟题干特征
+    // 拼合不上。改为 8-10 字块 + 步长 4-5，覆盖更长的关键短语
+    const win=10, step=4;
     const blocks=[];
     // 先按 | 拆多候选（Vision top3 合并成 "甲|申|由"），展开每个候选为独立块
     const variants=q.split("|").map(s=>s.trim()).filter(Boolean);
@@ -1579,9 +1603,12 @@ function scoreItem(c,qn){
       }
       // 尾部残块（确保长文本尾部关键词如"传感器"也被覆盖）
       if(v.length>win&&(v.length-win)%step!==0){blocks.push(v.slice(-win));}
-      // 如果滑窗没有覆盖到最后 win 字（step=3, win=6 时能覆盖，但保守再补一块）
+      // 如果滑窗没有覆盖到最后 win 字（step=4, win=10 时能覆盖，但保守再补一块）
       const tail=v.slice(v.length-win);
       if(blocks.indexOf(tail)<0)blocks.push(tail);
+      // 也加一个 6 字短块备用（兼容短的、紧凑的关键词）
+      const short=v.length>=6?v.slice(0,6):v;
+      if(blocks.indexOf(short)<0)blocks.push(short);
     }
     // 去重（保持顺序）
     const seen=new Set(),out=[];

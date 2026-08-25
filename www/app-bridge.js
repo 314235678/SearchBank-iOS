@@ -615,13 +615,18 @@
           var ex = window.__SB.extractQuestionText(text);
           // 把全文/清理版挂到原生能力上，UI 可选切换；返回值仍是 string
           // （保持与网页版原 tesseractRecognize 的接口兼容，避免破坏其它调用方）
+          // v2.16 修复：之前硬编码 mode:"stem" 会覆盖用户设置（用户在面板上选了"识别全文"也不生效）
+          // 现在从 localStorage 读用户上次选择的模式；默认 "raw"（识别全文，避免"只输出选项"）
+          var savedMode = "raw";
+          try { savedMode = localStorage.getItem("sb_ocr_default_mode") || "raw"; } catch(e) {}
+          if (savedMode !== "raw" && savedMode !== "stem") savedMode = "raw";
           window.__SB.__lastOCR = {
             raw:     text,         // OCR 识别原文（已做错别字纠正）
             cleaned: ex.raw,       // 去掉噪声行后的全文
             stem:    ex.stem,      // 自动提炼的"题干+选项"
-            mode:    "stem"
+            mode:    savedMode     // 跟随 localStorage 默认（"raw"）
           };
-          return ex.stem || text;
+          return savedMode === "raw" ? (ex.raw || text) : (ex.stem || text);
         })
         .catch(function (e) {
           if (_orig) return _orig(file, onProg);
