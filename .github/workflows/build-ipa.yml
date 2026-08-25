@@ -14,7 +14,8 @@ jobs:
 
       - name: Select Xcode
         run: |
-          XCODE_PATH=$(ls -d /Applications/Xcode*.app 2>/dev/null | head -n 1)
+          # 选最新的 Xcode（macos-latest runner 默认装 15.4，xcodegen 最新版生成 format 77 不兼容 15.4）
+          XCODE_PATH=$(ls -d /Applications/Xcode*.app 2>/dev/null | sort -V | tail -n 1)
           if [ -z "$XCODE_PATH" ]; then
             echo "未找到 Xcode，列出 /Applications："
             ls -1 /Applications
@@ -38,7 +39,11 @@ jobs:
           xcrun simctl runtime list || true
 
       - name: Install xcodegen
-        run: brew install xcodegen
+        run: |
+          # 锁版本：2.45.x 默认生成 Xcode project format 77，Xcode 15 拒收；
+          # 2.42.0 仍维护并生成兼容格式（format 56），对最新 xcode 也能 work
+          brew install xcodegen@2.42.0 || brew install xcodegen
+          xcodegen --version
 
       - name: Build unsigned IPA
         run: bash build_unsigned_ipa.sh
