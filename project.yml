@@ -9,7 +9,7 @@ name: SearchBank
 options:
   bundleIdPrefix: com.searchbank
   deploymentTarget:
-    iOS: "14.0"
+    iOS: "15.0"  # 15.0+：WKOpenPanelParameters 引入版本；iOS 14 国内几乎已无用户
   createIntermediateGroups: true
   minimumXcodeGenVersion: "2.20.0"
 settings:
