@@ -2,6 +2,7 @@ import UIKit
 import WebKit
 import UniformTypeIdentifiers
 import PhotosUI
+import Photos
 
 /// 搜题平台 iOS 外壳：用 WKWebView 承载网页版全部功能，
 /// 通过名为 "bridge" 的 WKScriptMessageHandler 与网页 JS 通信，
@@ -172,6 +173,8 @@ class ViewController: UIViewController,
             handleCaptureImage(id: id)
         case "pickImage":
             handlePickImage(id: id)
+        case "pickLatestPhoto":
+            handlePickLatestPhoto(id: id)
         case "processURL":
             // URL scheme 唤醒参数处理：JS 端只需要 acknowledge
             handleProcessURL(id: id, payload: payload)
@@ -332,6 +335,55 @@ class ViewController: UIViewController,
             } else {
                 r?(nil)
             }
+        }
+    }
+
+    // MARK: - 读取相册最新一张图片（快捷指令"截屏搜题"用）
+
+    /// 拉取相册里最新的一张图（默认是刚截的屏），转 base64 回 JS。
+    /// 需要相册读权限（NSPhotoLibraryUsageDescription 已在 Info.plist）。
+    private func handlePickLatestPhoto(id: String) {
+        // 无权限且未决定 → 请求；已决定但拒绝 → 错误提示
+        let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+        let proceed: () -> Void = {
+            let opts = PHFetchOptions()
+            opts.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
+            opts.fetchLimit = 1
+            let result = PHAsset.fetchAssets(with: .image, options: opts)
+            guard let asset = result.firstObject else {
+                self.respond(id: id, result: ["error": "相册为空"])
+                return
+            }
+            let manager = PHImageManager.default()
+            let reqOpts = PHImageRequestOptions()
+            reqOpts.isSynchronous = false
+            reqOpts.deliveryMode = .highQualityFormat
+            reqOpts.resizeMode = .exact
+            // 最长边缩到 2400，避免超大原图（iPhone 截图约 12MP）卡内存
+            let target = CGSize(width: 2400, height: 2400)
+            manager.requestImage(for: asset, targetSize: target, contentMode: .aspectFit, options: reqOpts) { img, _ in
+                guard let img = img, let jpeg = img.jpegData(compressionQuality: 0.85) else {
+                    self.respond(id: id, result: ["error": "读取图片失败"])
+                    return
+                }
+                self.respond(id: id, result: ["dataUrl": "data:image/jpeg;base64," + jpeg.base64EncodedString()])
+            }
+        }
+        switch status {
+        case .authorized, .limited:
+            proceed()
+        case .notDetermined:
+            PHPhotoLibrary.requestAuthorization(for: .readWrite) { newStatus in
+                DispatchQueue.main.async {
+                    if newStatus == .authorized || newStatus == .limited {
+                        proceed()
+                    } else {
+                        self.respond(id: id, result: ["error": "需要相册权限，请到 设置→隐私→照片 开启"])
+                    }
+                }
+            }
+        default:
+            respond(id: id, result: ["error": "需要相册权限，请到 设置→隐私→照片 开启"])
         }
     }
 

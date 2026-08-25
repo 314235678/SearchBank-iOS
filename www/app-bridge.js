@@ -94,6 +94,14 @@
     });
   };
 
+  /** 读相册最新一张图（默认就是刚截的屏），返回 data URL。 */
+  window.__SB.pickLatestPhoto = function () {
+    return post("pickLatestPhoto", {}).then(function (r) {
+      if (r && r.error) throw new Error(r.error);
+      return (r && r.dataUrl) || "";
+    });
+  };
+
   /** URL scheme 唤醒确认（实际跳转逻辑由 AppDelegate/ViewController 通过注入 JS 完成）。 */
   window.__SB.processURL = function (params) {
     return post("processURL", { params: params || {} }).then(function (r) {
@@ -126,6 +134,13 @@
       if (host === "fab-camera")      fireFAB("camera");
       else if (host === "fab-album")  fireFAB("album");
       else if (host === "fab-clipboard" || host === "fab-clip") fireFAB("clipboard");
+      else if (host === "ocr-latest" || host === "shot") {
+        // 截屏搜题：先切到 OCR 视图，再让 __SB.ocrLatest() 读相册最新一张并跑 OCR+搜题
+        if (typeof go === "function") go("ocr");
+        setTimeout(function () {
+          if (window.__SB && typeof window.__SB.ocrLatest === "function") window.__SB.ocrLatest();
+        }, 350);
+      }
       else if (host === "search") {
         if (typeof go === "function") go("search");
         if (params.q) {
@@ -291,6 +306,8 @@
   var OPTION_RE = /^\s*[A-Da-d]\s*[.、:：]\s*\S|^[A-Da-d]\s+[^\s]/;
   // 题面+（）/（）结尾短行（针对判断题"（）"题面）
   var PARENTH_BLANK = /[（(]\s*[）)]\s*$/;
+  // 问号/中文问号（题面可能含"？"）
+  var QMARK = /[?？]/;
 
   /**
    * 把识别结果处理成"更适合搜题"的文本。

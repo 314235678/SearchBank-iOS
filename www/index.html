@@ -8,31 +8,32 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='5' fill='%232563eb'/%3E%3Ccircle cx='10' cy='10' r='4.2' fill='none' stroke='%23fff' stroke-width='2'/%3E%3Cline x1='13.2' y1='13.2' x2='17' y2='17' stroke='%23fff' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E">
 <style>
   :root{
-    --bg:#f4f6fb; --card:#ffffff; --ink:#1f2430; --sub:#6b7280;
-    --line:#e6e9f0; --pri:#2563eb; --pri-d:#1d4ed8; --pri-bg:#eaf1ff;
-    --red:#dc2626; --green:#16a34a; --amber:#d97706; --soft:#f8fafc;
-    --radius:14px; --shadow:0 1px 3px rgba(20,30,60,.06),0 6px 18px rgba(20,30,60,.05);
+    --bg:#eef1f8; --card:#ffffff; --ink:#141a26; --sub:#5f6b7e;
+    --line:#e4e9f2; --pri:#2563eb; --pri-d:#1d4ed8; --pri-bg:#e9f1ff;
+    --red:#dc2626; --green:#16a34a; --amber:#d97706; --soft:#f6f8fc;
+    --radius:16px; --shadow:0 1px 2px rgba(20,30,60,.05),0 8px 24px rgba(20,30,60,.06);
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
   html,body{margin:0;padding:0;overscroll-behavior:none;}
   body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif;
-    background:var(--bg);color:var(--ink);font-size:15px;line-height:1.55;}
+    background:var(--bg);color:var(--ink);font-size:15px;line-height:1.55;
+    -webkit-font-smoothing:antialiased;}
   button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit;}
   input,select,textarea{font-family:inherit;font-size:16px;color:var(--ink);}
   .wrap{display:flex;min-height:100vh;}
   /* 侧边栏 */
-  .side{width:208px;background:var(--card);border-right:1px solid var(--line);padding:18px 12px;position:sticky;top:0;height:100vh;overflow:auto;}
+  .side{width:216px;background:var(--card);border-right:1px solid var(--line);padding:18px 12px;position:sticky;top:0;height:100vh;overflow:auto;}
   .logo{display:flex;align-items:center;gap:10px;padding:6px 8px 16px;font-weight:700;font-size:17px;}
-  .logo .mk{width:34px;height:34px;border-radius:10px;background:var(--pri);display:flex;align-items:center;justify-content:center;}
+  .logo .mk{width:34px;height:34px;border-radius:11px;background:linear-gradient(135deg,var(--pri),var(--pri-d));display:flex;align-items:center;justify-content:center;box-shadow:0 4px 10px rgba(37,99,235,.28);}
   .nav{display:flex;flex-direction:column;gap:4px;}
-  .nav button{display:flex;align-items:center;gap:11px;padding:11px 12px;border-radius:10px;color:var(--sub);font-size:15px;text-align:left;min-height:44px;transition:.15s;}
+  .nav button{display:flex;align-items:center;gap:11px;padding:11px 12px;border-radius:12px;color:var(--sub);font-size:15px;text-align:left;min-height:44px;transition:.15s;}
   .nav button svg{width:20px;height:20px;flex:0 0 20px;}
   .nav button.on{background:var(--pri-bg);color:var(--pri-d);font-weight:600;}
   .nav button:hover{background:var(--soft);}
   .side .sync{margin-top:14px;padding:10px 12px;border-top:1px solid var(--line);font-size:12px;color:var(--sub);display:flex;align-items:center;gap:7px;}
   .dot{width:8px;height:8px;border-radius:50%;background:var(--green);}
   /* 主区 */
-  .main{flex:1;min-width:0;padding:22px 26px 60px;max-width:1080px;}
+  .main{flex:1;min-width:0;padding:22px 26px 60px;max-width:1120px;margin:0 auto;}
   .topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:18px;}
   .topbar h1{font-size:22px;margin:0;}
   .topbar .acts{display:flex;gap:8px;flex-wrap:wrap;}
@@ -139,14 +140,19 @@
   .bot{display:none;}
   @media(max-width:768px){
     .side{display:none;}
-    .main{padding:16px 14px 86px;}
+    .main{padding:16px 14px 92px;}
     .grid-stats{grid-template-columns:repeat(2,1fr);}
     .topbar h1{font-size:19px;}
-    .bot{display:flex;position:fixed;bottom:0;left:0;right:0;background:var(--card);border-top:1px solid var(--line);
-      padding:6px 4px calc(6px + env(safe-area-inset-bottom));z-index:40;justify-content:space-around;}
-    .bot button{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--sub);font-size:11px;padding:4px 0;min-height:44px;}
+    .bot{display:flex;position:fixed;bottom:0;left:0;right:0;background:rgba(255,255,255,.94);
+      -webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);
+      border-top:1px solid var(--line);
+      padding:8px 6px calc(8px + env(safe-area-inset-bottom));z-index:40;justify-content:space-around;
+      box-shadow:0 -6px 24px rgba(20,30,60,.06);}
+    .bot button{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--sub);font-size:11px;padding:4px 0;min-height:46px;border-radius:10px;transition:.12s;}
     .bot button svg{width:22px;height:22px;}
-    .bot button.on{color:var(--pri);}
+    .bot button.on{color:var(--pri);background:var(--pri-bg);font-weight:600;}
+    .card{border-radius:18px;}
+    .opt{padding:15px 16px;border-radius:15px;}
   }
   .pc-only{display:inline-flex;}
   @media(max-width:768px){.pc-only{display:none;}}
@@ -196,6 +202,39 @@
   .tf-feedback{font-size:15px;font-weight:700;margin-top:8px;padding:10px 14px;border-radius:10px;display:none;}
   .tf-feedback.ok{display:block;background:#ecfdf3;color:var(--green);}
   .tf-feedback.no{display:block;background:#fef2f2;color:var(--red);}
+  /* 答题页增强：模式切换 / 自动下一题提示 / 收藏 / 工具栏 / 计算器 / 滑动 */
+  .play-top{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;}
+  .play-tabs{display:flex;gap:6px;background:var(--soft);padding:4px;border-radius:12px;}
+  .play-tabs button{border:none;background:transparent;padding:7px 14px;border-radius:9px;font-size:14px;color:var(--sub);cursor:pointer;}
+  .play-tabs button.on{background:var(--card);color:var(--pri-d);font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.08);}
+  .auto-next{display:none;align-items:center;gap:8px;margin:14px 0 0;padding:10px 14px;border-radius:12px;font-size:14px;font-weight:600;}
+  .auto-next.on{display:flex;}
+  .auto-next.ok{background:#ecfdf3;color:var(--green);}
+  .auto-next.no{background:#fef2f2;color:var(--red);}
+  .auto-next .cd{font-variant-numeric:tabular-nums;font-weight:800;margin-left:auto;}
+  .play-fav{position:absolute;top:18px;right:18px;width:38px;height:38px;border-radius:12px;border:1px solid var(--line);background:var(--card);font-size:19px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--sub);}
+  .play-fav.on{color:#f59e0b;border-color:#fde68a;background:#fffbeb;}
+  .play-card{position:relative;}
+  .play-tools{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;}
+  .play-tools button{flex:1;min-width:86px;justify-content:center;padding:10px 8px;font-size:13px;}
+  /* 计算器 */
+  #calcFab{position:fixed;right:18px;bottom:170px;z-index:74;width:52px;height:52px;border-radius:50%;border:none;background:#1f2430;color:#fff;font-size:22px;font-weight:700;display:none;align-items:center;justify-content:center;box-shadow:0 8px 22px rgba(15,23,42,.35);cursor:pointer;}
+  #calcFab.on{display:flex;}
+  #calcMask{display:none;position:fixed;inset:0;background:rgba(15,23,42,.4);z-index:95;}
+  #calcMask.on{display:block;}
+  #calcPanel{display:none;position:fixed;left:50%;bottom:24px;transform:translateX(-50%);width:min(92vw,340px);background:var(--card);border-radius:18px;box-shadow:0 20px 60px rgba(15,23,42,.25);z-index:96;padding:14px;flex-direction:column;gap:10px;}
+  #calcPanel.on{display:flex;}
+  #calcPanel .calc-head{display:flex;justify-content:space-between;align-items:center;}
+  #calcPanel .calc-head b{font-size:15px;}
+  #calcPanel .calc-head button{border:none;background:transparent;font-size:20px;color:var(--sub);cursor:pointer;padding:2px 8px;}
+  #calcPanel .calc-screen{background:var(--soft);border-radius:12px;padding:14px;text-align:right;min-height:56px;display:flex;flex-direction:column;justify-content:center;gap:2px;}
+  #calcPanel .calc-screen .expr{font-size:13px;color:var(--sub);word-break:break-all;min-height:16px;}
+  #calcPanel .calc-screen .res{font-size:26px;font-weight:700;color:var(--ink);word-break:break-all;}
+  .calc-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
+  .calc-grid button{height:48px;border-radius:12px;border:1px solid var(--line);background:var(--card);font-size:17px;cursor:pointer;}
+  .calc-grid button.op{background:var(--pri-bg);color:var(--pri-d);font-weight:600;}
+  .calc-grid button.eq{background:var(--pri);color:#fff;font-weight:700;border-color:var(--pri);}
+  .calc-grid button:active{transform:scale(.95);}
   .play-card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px;box-shadow:var(--shadow);}
   .play-meta{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;font-size:13px;color:var(--sub);flex-wrap:wrap;gap:8px;}
   .play-meta .badge{background:var(--pri-bg);color:var(--pri-d);padding:3px 10px;border-radius:999px;font-weight:600;}
@@ -348,6 +387,26 @@
   .paper-foot{text-align:center;font-size:.8em;color:#666;margin-top:12px;border-top:1px solid #ccc;padding-top:6px;}
   /* 打印：只打印试卷 */
   #printSheet{display:none;}
+  /* 练习记录 */
+  .rec-today{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:8px 0 4px;}
+  .rec-today .stat{padding:14px 12px;text-align:center;}
+  .rec-today .stat .n{font-size:24px;font-weight:700;color:var(--pri-d);}
+  .rec-today .stat .l{font-size:12px;color:var(--sub);margin-top:4px;}
+  .rec-week{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;}
+  .rec-week-title{font-size:14px;font-weight:600;color:var(--ink);margin-bottom:8px;display:flex;justify-content:space-between;}
+  .rec-bars{display:flex;align-items:flex-end;gap:8px;height:120px;border-bottom:1px solid var(--line);padding:0 4px;}
+  .rec-bar{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;position:relative;}
+  .rec-bar .bar{width:100%;background:linear-gradient(180deg,var(--pri),var(--pri-d));border-radius:6px 6px 0 0;min-height:2px;transition:height .25s;}
+  .rec-bar .bar.empty{background:var(--line);}
+  .rec-bar .n{font-size:11px;color:var(--sub);position:absolute;bottom:calc(100% + 2px);left:0;right:0;text-align:center;}
+  .rec-bar .d{font-size:11px;color:var(--sub);}
+  .rec-list{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:0;overflow:hidden;}
+  .rec-row{display:flex;align-items:center;padding:12px 14px;border-bottom:1px solid var(--line);gap:12px;}
+  .rec-row:last-child{border-bottom:none;}
+  .rec-row .when{flex:0 0 110px;color:var(--sub);font-size:13px;}
+  .rec-row .what{flex:1;font-size:14px;color:var(--ink);}
+  .rec-row .stat-n{flex:0 0 90px;text-align:right;font-weight:700;color:var(--pri-d);font-size:15px;}
+  .rec-empty{padding:40px;text-align:center;color:var(--sub);}
   @media print{
     body *{visibility:hidden;}
     #printSheet,#printSheet *{visibility:visible;}
@@ -376,6 +435,7 @@
       <button data-view="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg>试题搜索</button>
       <button data-view="manage"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3.5" cy="6" r="1.3"/><circle cx="3.5" cy="12" r="1.3"/><circle cx="3.5" cy="18" r="1.3"/></svg>题库管理</button>
       <button data-view="train"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/><line x1="9" y1="7" x2="15" y2="7"/><line x1="9" y1="11" x2="15" y2="11"/></svg>练习</button>
+      <button data-view="records"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 14l4-4 4 4 5-5"/></svg>记录</button>
       <button data-view="paper"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>出试卷</button>
     </nav>
     <div class="sync"><span class="dot"></span><span id="syncTxt">本地存储模式</span></div>
@@ -574,6 +634,22 @@
         <div id="ppPreview" style="overflow:auto;background:#525659;border-radius:12px;padding:12px;display:flex;flex-direction:column;align-items:center;"></div>
       </div>
     </section>
+
+    <!-- 练习记录 -->
+    <section class="view" id="v-records">
+      <div class="card">
+        <h2><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18" style="vertical-align:-3px"><path d="M3 3v18h18"/><path d="M7 14l4-4 4 4 5-5"/></svg> 今日概览</h2>
+        <div class="rec-today" id="recToday"></div>
+      </div>
+      <div class="card" style="margin-top:14px">
+        <h2>近 7 天练习量</h2>
+        <div class="rec-week"><div class="rec-week-title"><span>做题数（按天）</span><span class="muted" id="recWeekSum"></span></div><div class="rec-bars" id="recBars"></div></div>
+      </div>
+      <div class="card" style="margin-top:14px">
+        <h2>最近练习 <button class="btn ghost" id="recClear" style="margin-left:auto;padding:6px 12px;font-size:13px">清空记录</button></h2>
+        <div class="rec-list" id="recList"></div>
+      </div>
+    </section>
   </main>
 </div>
 
@@ -585,6 +661,7 @@
   <button data-view="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg>搜索</button>
   <button data-view="manage"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3.5" cy="6" r="1.3"/><circle cx="3.5" cy="12" r="1.3"/><circle cx="3.5" cy="18" r="1.3"/></svg>管理</button>
   <button data-view="train"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/><line x1="9" y1="7" x2="15" y2="7"/><line x1="9" y1="11" x2="15" y2="11"/></svg>练习</button>
+  <button data-view="records"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 14l4-4 4 4 5-5"/></svg>记录</button>
   <button data-view="paper"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>试卷</button>
 </nav>
 
@@ -873,7 +950,7 @@ function fmtDate(ts){const d=new Date(ts);const p=n=>String(n).padStart(2,"0");r
 function todayStart(){const d=new Date();d.setHours(0,0,0,0);return d.getTime();}
 
 /* ============ 导航 ============ */
-const TITLES={home:"概览",import:"导入题库",ocr:"图片识别",search:"试题搜索",manage:"题库管理",train:"练习",paper:"出试卷"};
+const TITLES={home:"概览",import:"导入题库",ocr:"图片识别",search:"试题搜索",manage:"题库管理",train:"练习",records:"练习记录",paper:"出试卷"};
 function go(view){
   $all(".nav button,.bot button").forEach(b=>b.classList.toggle("on",b.dataset.view===view));
   $all(".view").forEach(v=>v.classList.toggle("on",v.id==="v-"+view));
@@ -883,6 +960,7 @@ function go(view){
   if(view==="manage")renderManage();
   if(view==="import")fillBankSelects();
   if(view==="train")renderTrain();
+  if(view==="records")renderRecords();
   if(view==="paper")renderPaper();
 }
 $all(".nav button,.bot button").forEach(b=>b.addEventListener("click",()=>go(b.dataset.view)));
@@ -2590,7 +2668,7 @@ function startSession(o){
   // 重置旧 session 的 timer，避免上次倒计时还在跑
   if(typeof S!=="undefined" && S && S.timer){clearInterval(S.timer);}
   let list=o.list||buildList(f);
-  // 模拟考试按题型数量抽题（如果调用方没直接传入 list）
+    // 模拟考试按题型数量抽题（如果调用方没直接传入 list）
   if(!o.list&&o.exam&&o.examTypes&&o.examTypes.length&&o.typeCounts){
     let picked=[];
     // 严格按 TYPES 顺序抽题（单选→多选→判断…），保证题型不乱
@@ -2598,7 +2676,8 @@ function startSession(o){
       if(!o.examTypes.includes(t))return;
       const n=(o.typeCounts[t]||0);
       if(!n)return;
-      const pool=list.filter(i=>i.type===t);
+      // 错题优先：抽题时把错题多的排前面
+      const pool=list.filter(i=>i.type===t).sort((a,b)=>(b.wrongCount||0)-(a.wrongCount||0));
       if(pool.length){const shuffled=shuffle(pool.slice());picked=picked.concat(shuffled.slice(0,n));}
     });
     list=picked;
@@ -2608,6 +2687,13 @@ function startSession(o){
     if(o.limit)list=list.slice(0,o.limit);
   }
   if(!list.length){toast("没有符合条件的题目");return;}
+  // 每题固定一次选项乱序（用 _order 存打乱后的下标，保证每次 render 顺序稳定）
+  list.forEach(it=>{
+    if(it.opts&&it.opts.length>1&&!it._order){
+      const idx=it.opts.map((_,i)=>i);
+      it._order=shuffle(idx);
+    }
+  });
   S={list,idx:0,mode:o.mode,order:o.order||"seq",exam:!!o.exam,examMin:o.examMin||0,results:[],answered:{},startedAt:Date.now(),timeLeft:(o.examMin||0)*60,timer:null,bankId:f.bankId,type:f.type,onlyWrong:f.onlyWrong,onlyHard:f.onlyHard,limit:o.limit,examTypes:o.examTypes||null,typeCounts:o.typeCounts||null,scoreMap:o.scoreMap||{"单选题":1,"多选题":1,"判断题":1,"填空题":1,"简答题":1,"其他":1},passScore:o.passScore||0,totalScore:o.totalScore||list.length};
   $("#trainHome").style.display="none";$("#trainPlay").style.display="";
   if(S.exam&&S.examMin){S.timer=setInterval(()=>{S.timeLeft--;updateTimer();if(S.timeLeft<=0){clearInterval(S.timer);finishSession();}},1000);}
@@ -2659,7 +2745,9 @@ function renderQuestion(){
   }else{
     if(it.opts&&it.opts.length){
       let opts='<div class="opts" id="playOpts">';
-      it.opts.forEach(o=>{
+      // 用 session 内固定的乱序（_order）渲染选项，避免每次 render 顺序跳动
+      const optArr = (it._order&&it._order.length) ? it._order.map(i=>it.opts[i]) : it.opts;
+      optArr.forEach(o=>{
         let cls="opt";const isCo=labs?labs.includes(o.label):false;
         if(ans){if(Array.isArray(ans.chosen)){if(ans.chosen.includes(o.label))cls+=ans.correct?' ok':' no';else if(isCo)cls+=' ok';}else{if(ans.chosen===o.label)cls+=ans.correct?' ok':' no';else if(isCo)cls+=' ok';}}
         const check=cls.includes('no')?'✕':(cls.includes('sel')||cls.includes('ok'))?'✓':'';
@@ -2746,7 +2834,92 @@ function finishSession(){
   $("#trainPlay").innerHTML=h;
   $("#backHome").onclick=exitSession;
   $("#again").onclick=()=>{const f={bankId:S.bankId,type:S.type,onlyWrong:S.onlyWrong,onlyHard:S.onlyHard};startSession({mode:S.mode,order:S.order,exam:S.exam,examMin:S.examMin,limit:S.limit,examTypes:S.examTypes,typeCounts:S.typeCounts,scoreMap:S.scoreMap,passScore:S.passScore,totalScore:S.totalScore,...f});};
+  recordSession();
   save();
+}
+
+/* ============ 练习记录 ============ */
+function recordSession(){
+  if(!S||!S.list||!S.list.length)return;
+  try{
+    if(!DATA.records)DATA.records=[];
+    // 摘要字段，避免记录过大
+    const byType={};
+    S.list.forEach(it=>{
+      const t=it.type||"其他";
+      if(!byType[t])byType[t]={total:0,correct:0};
+      byType[t].total++;
+      const r=S.results.find(x=>x.id===it.id);
+      if(r&&r.correct===true)byType[t].correct++;
+    });
+    const durationSec=Math.max(1,Math.round((Date.now()-S.startedAt)/1000));
+    DATA.records.unshift({
+      id:uid(),
+      at:Date.now(),
+      mode:S.mode||"answer",
+      exam:!!S.exam,
+      bankId:S.bankId||"",
+      bankName:bankName(S.bankId),
+      type:S.type||"",
+      total:S.list.length,
+      correct:S.results.filter(r=>r.correct===true).length,
+      wrong:S.results.filter(r=>r.correct===false).length,
+      unjudge:S.results.filter(r=>r.correct===null).length,
+      durationSec,
+      byType
+    });
+    // 最多保留 500 条，防止无限增长
+    if(DATA.records.length>500)DATA.records.length=500;
+  }catch(e){console.warn("recordSession failed",e);}
+}
+function renderRecords(){
+  const recs=DATA.records||[];
+  const ts=todayStart();
+  // 今日统计
+  const today=recs.filter(r=>r.at>=ts);
+  const todayQ=today.reduce((a,r)=>a+r.total,0);
+  const todayC=today.reduce((a,r)=>a+r.correct,0);
+  const todaySec=today.reduce((a,r)=>a+r.durationSec,0);
+  const p=n=>String(n).padStart(2,"0");
+  const hm=Math.floor(todaySec/60)+":"+p(todaySec%60);
+  $("#recToday").innerHTML=
+    '<div class="stat"><div class="n">'+today.length+'</div><div class="l">今日练习次数</div></div>'
+    +'<div class="stat"><div class="n">'+todayQ+'</div><div class="l">今日做题数</div></div>'
+    +'<div class="stat"><div class="n">'+hm+'</div><div class="l">今日时长</div></div>';
+  // 近 7 天柱状图
+  const days=[];
+  for(let i=6;i>=0;i--){
+    const d=new Date(ts - i*86400000);
+    const key=fmtDate(d.getTime());
+    const label=p(d.getMonth()+1)+"/"+p(d.getDate());
+    const n=recs.filter(r=>fmtDate(r.at)===key).reduce((a,r)=>a+r.total,0);
+    days.push({label,n});
+  }
+  const maxN=Math.max(1,...days.map(d=>d.n));
+  $("#recWeekSum").textContent="共 "+days.reduce((a,d)=>a+d.n,0)+" 题";
+  $("#recBars").innerHTML=days.map(d=>
+    '<div class="rec-bar"><div class="n" style="'+(d.n?'':'display:none')+'">'+d.n+'</div>'
+    +'<div class="bar'+(d.n?'':' empty')+'" style="height:'+Math.max(4,Math.round(d.n/maxN*100))+'%"></div>'
+    +'<div class="d">'+d.label+'</div></div>'
+  ).join("");
+  // 最近记录
+  if(!recs.length){
+    $("#recList").innerHTML='<div class="rec-empty">还没有练习记录。<br>去「练习」做几题，这里会自动统计。</div>';
+  }else{
+    $("#recList").innerHTML=recs.slice(0,30).map(r=>{
+      const rate=r.total?Math.round(r.correct/r.total*100):0;
+      const modeTxt=r.exam?"模拟考试":(r.mode==="recite"?"背题":"练习");
+      const what=(r.bankName||"全部题库")+(r.type?" · "+r.type:"")+" · "+modeTxt;
+      const when=fmtTimeHM(r.at);
+      return '<div class="rec-row"><div class="when">'+when+'</div><div class="what">'+esc(what)+' · '+r.total+' 题</div><div class="stat-n">'+r.correct+'/'+r.total+' · '+rate+'%</div></div>';
+    }).join("");
+  }
+  const clr=$("#recClear");
+  if(clr)clr.onclick=()=>confirm2("清空练习记录","将删除全部 "+recs.length+" 条练习记录，且无法撤销。",()=>{DATA.records=[];save();renderRecords();toast("已清空");});
+}
+function fmtTimeHM(ts){
+  const d=new Date(ts);const p=n=>String(n).padStart(2,"0");
+  return p(d.getMonth()+1)+"-"+p(d.getDate())+" "+p(d.getHours())+":"+p(d.getMinutes());
 }
 function exitSession(){$("#trainPlay").style.display="none";$("#trainHome").style.display="";$("#trainPlay").innerHTML="";S=null;renderTrain();}
 function typeCountsInFilter(filter){
@@ -3493,6 +3666,234 @@ $("#ppBank").addEventListener("change",()=>{renderPPTypeRows();ppState=null;rend
   <div class="ans-float-body" id="ansBody"></div>
 </div>
 
+<!-- 计算器：答题页可用 -->
+<button id="calcFab" type="button" aria-label="计算器">÷</button>
+<div id="calcMask"></div>
+<div id="calcPanel" role="dialog" aria-label="计算器">
+  <div class="calc-head"><b>🧮 计算器</b><button id="calcClose" type="button" aria-label="关闭">×</button></div>
+  <div class="calc-screen"><div class="expr" id="calcExpr">&nbsp;</div><div class="res" id="calcRes">0</div></div>
+  <div class="calc-grid">
+    <button data-c="clear" class="op">C</button>
+    <button data-c="paren">( )</button>
+    <button data-c="percent" class="op">%</button>
+    <button data-c="div" class="op">÷</button>
+    <button data-c="7">7</button><button data-c="8">8</button><button data-c="9">9</button>
+    <button data-c="mul" class="op">×</button>
+    <button data-c="4">4</button><button data-c="5">5</button><button data-c="6">6</button>
+    <button data-c="sub" class="op">−</button>
+    <button data-c="1">1</button><button data-c="2">2</button><button data-c="3">3</button>
+    <button data-c="add" class="op">+</button>
+    <button data-c="0" style="grid-column:span 2">0</button>
+    <button data-c="dot">.</button>
+    <button data-c="sqrt" class="op">√</button>
+    <button data-c="pow" class="op">x²</button>
+    <button data-c="eq" class="eq">=</button>
+  </div>
+</div>
+
+<script>
+/* ===================== 计算器 ===================== */
+(function () {
+  if (window.__calcBound) return;
+  window.__calcBound = true;
+  var fab   = document.getElementById("calcFab");
+  var mask  = document.getElementById("calcMask");
+  var panel = document.getElementById("calcPanel");
+  var exprEl= document.getElementById("calcExpr");
+  var resEl = document.getElementById("calcRes");
+  var expr = "";
+
+  function show(open) {
+    fab.classList.toggle("on", !open);
+    mask.classList.toggle("on", open);
+    panel.classList.toggle("on", open);
+    if (open) render();
+  }
+  function render() {
+    exprEl.innerHTML = esc(expr) || "&nbsp;";
+    try {
+      if (!expr) { resEl.textContent = "0"; return; }
+      var safe = expr
+        .replace(/×/g, "*").replace(/÷/g, "/").replace(/−/g, "-")
+        .replace(/√\(/g, "Math.sqrt(").replace(/√/g, "Math.sqrt(")
+        .replace(/x²/g, "**2").replace(/%/g, "/100")
+        .replace(/Math\.sqrt\(\)/g, "");
+      // 只允许数字/运算符/括号/小数点/Math.sqrt
+      if (!/^[0-9+\-*/().Mathsqrt, ]+$/.test(safe) || /[a-zA-Z]/.test(safe.replace(/Math\.sqrt/g, ""))) {
+        resEl.textContent = "…";
+        return;
+      }
+      var val = Function('"use strict";return (' + safe + ')')();
+      resEl.textContent = (typeof val === "number" && isFinite(val)) ? String(Math.round(val * 1e10) / 1e10) : "错误";
+    } catch (e) { resEl.textContent = "…"; }
+  }
+  function press(key) {
+    if (key === "clear") expr = "";
+    else if (key === "eq") {
+      try {
+        var safe = expr.replace(/×/g,"*").replace(/÷/g,"/").replace(/−/g,"-")
+          .replace(/√/g,"Math.sqrt(").replace(/x²/g,"**2").replace(/%/g,"/100");
+        var v = Function('"use strict";return (' + safe + ')')();
+        if (typeof v === "number" && isFinite(v)) { expr = String(Math.round(v * 1e10) / 1e10); }
+      } catch (e) { expr = ""; }
+    }
+    else if (key === "paren") {
+      expr += (expr.match(/\(/g) || []).length > (expr.match(/\)/g) || []).length ? ")" : "(";
+    }
+    else if (key === "sqrt") expr += "√(";
+    else if (key === "pow") expr += "x²";
+    else expr += key === "div" ? "÷" : key === "mul" ? "×" : key === "sub" ? "−" : key === "add" ? "+" : key === "percent" ? "%" : key;
+    render();
+  }
+  if (fab) fab.addEventListener("click", function () { show(true); });
+  if (mask) mask.addEventListener("click", function () { show(false); });
+  var closeBtn = document.getElementById("calcClose");
+  if (closeBtn) closeBtn.addEventListener("click", function () { show(false); });
+  var grid = panel && panel.querySelector(".calc-grid");
+  if (grid) grid.addEventListener("click", function (ev) {
+    var b = ev.target.closest && ev.target.closest("button[data-c]");
+    if (b) press(b.getAttribute("data-c"));
+  });
+  window.__SB.calcOpen = function (open) { show(open !== false); };
+})();
+</script>
+
+<script>
+/* ===================== 答题增强：自动判分 / 模式切换 / 滑动 / 收藏 ===================== */
+(function () {
+  if (window.__playBoost) return;
+  window.__playBoost = true;
+
+  // 在每次 renderQuestion 结束后调用：绑滑动手势 + 收藏 + 工具栏 + 自动下一题
+  var origRender = window.renderQuestion;
+  window.renderQuestion = function () {
+    if (origRender) origRender();
+    bindBoost();
+    // 答题中显示计算器按钮（背题模式也显示）
+    if (typeof S !== "undefined" && S && document.getElementById("calcFab")) {
+      document.getElementById("calcFab").classList.add("on");
+    }
+  };
+
+  function bindBoost() {
+    if (!(typeof S !== "undefined" && S)) return;
+    var it = S.list[S.idx];
+    if (!it) return;
+    var ans = S.answered[it.id];
+    var card = document.querySelector("#trainPlay .play-card");
+    if (!card) return;
+
+    // 1) 收藏按钮（右上角）
+    var fav = document.createElement("button");
+    fav.className = "play-fav" + (it.fav ? " on" : "");
+    fav.type = "button";
+    fav.textContent = it.fav ? "★" : "☆";
+    fav.title = "收藏";
+    fav.addEventListener("click", function () {
+      it.fav = !it.fav;
+      save();
+      if (typeof renderQuestion === "function") renderQuestion();
+      toast(it.fav ? "已收藏" : "已取消收藏");
+    });
+    card.appendChild(fav);
+
+    // 2) 模式切换 tab（答题 / 背题）
+    var top = document.createElement("div");
+    top.className = "play-top";
+    top.innerHTML =
+      '<div class="play-tabs">' +
+        '<button data-mode="answer" class="' + (S.mode !== "recite" ? "on" : "") + '">答题</button>' +
+        '<button data-mode="recite" class="' + (S.mode === "recite" ? "on" : "") + '">背题</button>' +
+      '</div>';
+    card.insertBefore(top, card.firstChild);
+    top.querySelectorAll("button[data-mode]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        if (S.mode === b.getAttribute("data-mode")) return;
+        S.mode = b.getAttribute("data-mode");
+        if (typeof renderQuestion === "function") renderQuestion();
+      });
+    });
+
+    // 3) 自动判分 + 自动下一题：单选/判断题已作答 → 显示反馈条 + 1.6s 自动下一题
+    if (S.mode !== "recite" && ans && ans.correct !== null) {
+      var fb = document.createElement("div");
+      fb.className = "auto-next " + (ans.correct ? "ok" : "no");
+      fb.innerHTML = ans.correct
+        ? '<span>✅ 回答正确</span>'
+        : '<span>❌ 回答错误</span><span class="cd">正确答案：' + esc(it.a || "") + '</span>';
+      card.appendChild(fb);
+      // 答对自动跳；答错停留（可手动下一题/重做）
+      if (ans.correct && S.idx < S.list.length - 1) {
+        var sec = 2, cd = document.createElement("span");
+        cd.className = "cd"; cd.textContent = sec + "s";
+        fb.querySelector("span") && fb.appendChild(cd);
+        var t0 = Date.now();
+        var iv = setInterval(function () {
+          var left = 2 - Math.floor((Date.now() - t0) / 1000);
+          if (left <= 0) {
+            clearInterval(iv);
+            if (S && S.idx < S.list.length - 1) { S.idx++; renderQuestion(); }
+          } else {
+            cd.textContent = left + "s";
+          }
+        }, 200);
+      }
+    }
+
+    // 4) 底部工具栏：收藏/计算器/交卷 已有，加 上一题/下一题 快捷
+    var tools = document.createElement("div");
+    tools.className = "play-tools";
+    tools.innerHTML =
+      '<button class="btn" id="bdPrev"' + (S.idx === 0 ? ' disabled style="opacity:.5"' : '') + '>‹ 上一题</button>' +
+      '<button class="btn" id="bdNext">下一题 ›</button>' +
+      '<button class="btn" id="bdCalc">🧮 计算器</button>';
+    card.appendChild(tools);
+    var bp = document.getElementById("bdPrev");
+    if (bp) bp.onclick = function () { if (S.idx > 0) { S.idx--; renderQuestion(); } };
+    var bn = document.getElementById("bdNext");
+    if (bn) bn.onclick = function () {
+      var it2 = S.list[S.idx];
+      if (!S.answered[it2.id]) S.results.push({ id: it2.id, correct: null });
+      if (S.idx < S.list.length - 1) { S.idx++; renderQuestion(); } else { finishSession(); }
+    };
+    var bc = document.getElementById("bdCalc");
+    if (bc) bc.onclick = function () { if (window.__SB && typeof window.__SB.calcOpen === "function") window.__SB.calcOpen(true); };
+
+    // 5) 左右滑动切换题（触摸）
+    var startX = null, startY = null, moved = false;
+    var trainPlay = document.getElementById("trainPlay");
+    if (trainPlay) {
+      trainPlay.addEventListener("touchstart", function (e) {
+        if (e.touches.length !== 1) return;
+        startX = e.touches[0].clientX;
+        startY = e.touches[0].clientY;
+        moved = false;
+      }, { passive: true });
+      trainPlay.addEventListener("touchmove", function (e) {
+        if (startX === null) return;
+        var dx = e.touches[0].clientX - startX;
+        var dy = e.touches[0].clientY - startY;
+        if (Math.abs(dx) > 12 && Math.abs(dx) > Math.abs(dy)) { moved = true; }
+      }, { passive: true });
+      trainPlay.addEventListener("touchend", function (e) {
+        if (startX === null) return;
+        var dx = (e.changedTouches[0].clientX - startX);
+        var dy = (e.changedTouches[0].clientY - startY);
+        startX = null; startY = null;
+        if (!moved || Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy)) return;
+        moved = false;
+        if (dx < 0) { // 左滑 → 下一题
+          var it2 = S.list[S.idx];
+          if (!S.answered[it2.id]) S.results.push({ id: it2.id, correct: null });
+          if (S.idx < S.list.length - 1) { S.idx++; renderQuestion(); } else { finishSession(); }
+        } else if (S.idx > 0) { // 右滑 → 上一题
+          S.idx--; renderQuestion();
+        }
+      }, { passive: true });
+    }
+  }
+})();
+</script>
 <script>
 /* ===================== 悬浮搜题（FAB）行为 ===================== */
 (function () {
@@ -3687,6 +4088,25 @@ $("#ppBank").addEventListener("change",()=>{renderPPTypeRows();ppState=null;rend
     var inp = $("#searchInput"); if (inp) inp.value = query;
     if (typeof doSearch === "function") doSearch();
     showAnsForCurrentResults(query, srcLabel);
+  };
+
+  /** 截屏搜题：读相册最新一张（默认就是刚截的图）→ OCR → 搜题 → 浮窗答案。
+   *  searchbank://ocr-latest 会触发到这里。 */
+  window.__SB.ocrLatest = function () {
+    showLoading(true);
+    if (!(window.__SB && window.__SB.native && typeof window.__SB.pickLatestPhoto === "function")) {
+      showLoading(false);
+      toast("当前环境不支持读取最新截图");
+      return;
+    }
+    window.__SB.pickLatestPhoto().then(function (dataUrl) {
+      showLoading(false);
+      if (!dataUrl) { toast("相册里没读到截图（可能还没截，或权限被拒）"); return; }
+      runNativeBase64Ocr(dataUrl, "最新截图");
+    }).catch(function (e) {
+      showLoading(false);
+      toast("读取截图失败：" + (e && e.message ? e.message : e));
+    });
   };
 })();
 </script>
