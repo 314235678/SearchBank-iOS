@@ -589,13 +589,24 @@
 .records-week .day .n{font-size:11px;color:var(--ink);font-weight:600;}
 .records-week .day .d{font-size:11px;color:var(--sub);}
 
+/* v2.21：题型练习二级面板（在 v-train 内嵌，renderTypesPanel 渲染） */
+.types-list{display:flex;flex-direction:column;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:14px;overflow:hidden;}
+.types-list .type-row{display:flex;align-items:center;gap:14px;padding:16px 18px;background:#fff;cursor:pointer;transition:background .15s;}
+.types-list .type-row:hover{background:var(--soft);}
+.types-list .type-row:active{background:#dbeafe;}
+.types-list .type-row .t-title{flex:1;font-size:15.5px;font-weight:600;color:var(--ink);line-height:1.3;}
+.types-list .type-row .t-sub{font-size:12.5px;color:var(--sub);margin-top:2px;}
+.types-list .type-row .t-num{font-size:22px;font-weight:800;color:var(--pri);font-variant-numeric:tabular-nums;}
+.types-list .type-row .t-num span{font-size:13px;font-weight:500;color:var(--sub);margin-left:2px;}
+.types-list .type-group{padding:10px 18px 4px;background:var(--soft);font-size:13px;font-weight:600;color:var(--sub);letter-spacing:.5px;}
+
 @media print{
     body *{visibility:hidden;}
     #printSheet,#printSheet *{visibility:visible;}
     #printSheet{display:block !important;position:absolute;left:0;top:0;width:100%;background:#fff;}
     .paper{box-shadow:none !important;margin:0 !important;max-width:none !important;page-break-after:always !important;}
     .paper:last-child{page-break-after:auto !important;}
-    .paper.size-A3L,.paper.size-A3P,.paper.size-A4L,.paper.size-A4P{width:auto !important;min-height:auto !important;}
+    .paper.size-A3L,.paper.size-A3P,.paper.size-A4L,.paper.size-A4P{width:auto !important;min-height:auto !important;min-width:auto !important;}
     @page{size:A3 landscape;margin:15mm;}
   }
 </style>
@@ -900,6 +911,7 @@
     <!-- 练习 -->
     <section class="view" id="v-train">
       <div id="trainHome" class="train-home"></div>
+      <div id="trainTypes" style="display:none"></div>
       <div id="trainPlay" style="display:none;"></div>
     </section>
 
@@ -1668,16 +1680,44 @@ function doSearch(){
   // 【v2.18 关键修复】跟网页版一致：先用【完整 query】评分！
   //   网页版直接 scoreItem(c, q)，Q.includes(完整query) → 原题整段命中 = 满分 → 排第 1。
   //   手机版之前只对 10 字块评分，整段匹配能力被切碎，噪声题靠通用词块也能凑分 → 原题被挤到第 7。
-  //   现在：完整 query 整段命中/高相似 → 直接给极高分；否则才退回分块容错（防 OCR 错 1-2 字）。
+  // 【v2.21】再增强：① 阈值 15→10（更宽松，让 fuzzyScore≥0.5 也能进满分倍数）
+  //   ② 加 3 个"原题指纹"强信号：题干前 12 字子串命中 Q / 滑窗 fuzzy≥0.7 / ngram3Sim≥0.55
+  //     解决 OCR 错 1-2 字或 query 被截短时，原题也能绝对排第一。
   const scoreBlocks=(c)=>{
     if(blocks.length<=1)return scoreItem(c,primaryQ);
     // ---- 1) 完整 query 评分（网页版同款逻辑）----
     //   20 = 题干精确命中满分(10×STEM_W=20)；fuzzy 高分(>0.75)也算整段高相似
     const fullScore=scoreItem(c,q);
-    if(fullScore>=15){
+    if(fullScore>=10){  // v2.21：15→10（让 fuzzyScore≈0.5 也能进满分倍数，OCR 错 1 字也能命中）
       // 整段命中/高相似 → 放大 100 倍，绝对排第一（模拟网页版"满分优先"）
       return fullScore*100;
     }
+    // ---- 1.5) v2.21：原题三重"指纹"强信号 ----
+    //   即使完整 query 没匹配（OCR 错 1-2 字 / 加了杂质 / 被截短），原题特征词仍能定位
+    let trueTitle=0;
+    if(q.length>=6){
+      // (a) 取 query 题干头部（前 12 字）作"题干指纹"，看 Q 是否包含
+      const prefix = q.length>=12 ? q.slice(0,12) : q;
+      if(c.Q.includes(prefix)){
+        trueTitle=Math.max(trueTitle, 8000);  // 题干头部完全命中（很可能是原题）
+      } else if(prefix.length>=6){
+        // 子串不命中：在 Q 前部 36 字内做滑窗 fuzzy，找最接近 prefix 的子串
+        const qHead = c.Q.slice(0, Math.min(36, c.Q.length));
+        let bestF=0;
+        for(let i=0;i+prefix.length<=qHead.length;i++){
+          const sub=qHead.slice(i,i+prefix.length);
+          const d=editDist(prefix,sub);
+          const f=1-d/prefix.length;
+          if(f>bestF){bestF=f;if(bestF>=0.97)break;}
+        }
+        if(bestF>=0.85) trueTitle=Math.max(trueTitle,7000);
+        else if(bestF>=0.7) trueTitle=Math.max(trueTitle,4500);
+      }
+      // (b) ngram3Sim 题干核心词覆盖率 ≥ 0.55 → 触发强信号
+      const nsim=ngram3Sim(c.Q, q);
+      if(nsim>=0.55) trueTitle=Math.max(trueTitle, 6000*nsim);
+    }
+    if(trueTitle>0) return trueTitle;
     // ---- 2) 否则分块容错（OCR 有错字场景）----
     let total=0, used=0;
     for(let bi=0;bi<blocks.length;bi++){
@@ -2252,11 +2292,16 @@ function expandItem(id,btn){
 }
 function renderMgStats(){
   var box=$("#mgStats");if(!box)return;
+  // v2.21：题库统计按 #mgBank 选中题库过滤（默认全部）
+  var mb=$("#mgBank");
+  var bid=mb?mb.value:"all";
   // v2.19：题库统计（按题型 + 答案选项分布 + 问题题数）
   var byType={},badCount=0,total=0;
   var ansCount={};  // 选项→题数（A:100, B:80, ...）
   for(var i=0;i<DATA.items.length;i++){
     var it=DATA.items[i];
+    // v2.21：按当前选中题库过滤
+    if(bid&&bid!=="all"&&it.bankId!==bid)continue;
     ensureType(it);
     total++;
     if(isBadItem(it)){badCount++;continue;}  // 问题题不计入选项统计
@@ -2268,8 +2313,9 @@ function renderMgStats(){
     else{for(var j=0;j<ans.length;j++){var c=ans[j];if(/[A-H]/.test(c))ansCount[c]=(ansCount[c]||0)+1;}}
   }
   // 渲染
+  var bankTxt=(bid==="all")?"全部题库":((DATA.banks||[]).find(b=>b.id===bid)?.name||"");
   var html="";
-  html+='<div style="font-weight:600;margin-bottom:4px">📊 题库统计（'+total+' 题）</div>';
+  html+='<div style="font-weight:600;margin-bottom:4px">📊 题库统计'+(bankTxt?(' · '+esc(bankTxt)):'')+'（'+total+' 题）</div>';
   html+='<div style="display:flex;flex-wrap:wrap;gap:8px 14px">';
   for(var k of TYPES){
     var n=byType[k]||0;
@@ -2287,6 +2333,11 @@ function renderMgStats(){
   }else{html+='暂无数据';}
   html+='</div>';
   box.innerHTML=html;
+  // v2.21：题库切换时重渲染统计（避免用户改了 mgBank 后统计没更新）
+  if(mb && !mb.__statsBound){
+    mb.__statsBound=1;
+    mb.addEventListener("change",renderMgStats);
+  }
 }
 function renderManage(){
   renderBanks();
@@ -3511,12 +3562,17 @@ function buildList(f){
   let list=DATA.items.slice().map(i=>ensureType(i));
   if(f.bankId&&f.bankId!=="all")list=list.filter(i=>i.bankId===f.bankId);
   if(f.type)list=list.filter(i=>i.type===f.type);
+  // v2.21：判断题分对错练习（f.judgment="true"/"false"）
+  if(f.judgment==="true")list=list.filter(i=>isTrueAnswer(i.a));
+  if(f.judgment==="false")list=list.filter(i=>isFalseAnswer(i.a));
+  // v2.21：试题分难易（f.difficulty="mid" → 未练习过的题）
+  if(f.difficulty==="mid")list=list.filter(i=>((i.rightCount||0)+(i.wrongCount||0))===0);
   if(f.onlyWrong)list=list.filter(i=>i.wrongCount>0&&!i.mastered);
   if(f.onlyHard)list=list.filter(i=>i.wrongCount>=2);
   return list;
 }
 function startSession(o){
-  const f={bankId:o.bankId,type:o.type,onlyWrong:o.onlyWrong,onlyHard:o.onlyHard};
+  const f={bankId:o.bankId,type:o.type,onlyWrong:o.onlyWrong,onlyHard:o.onlyHard,judgment:o.judgment,difficulty:o.difficulty};
   // 重置旧 session 的 timer，避免上次倒计时还在跑
   if(typeof S!=="undefined" && S && S.timer){clearInterval(S.timer);}
   let list=o.list||buildList(f);
@@ -3546,7 +3602,7 @@ function startSession(o){
       it._order=shuffle(idx);
     }
   });
-  S={list,idx:0,mode:o.mode,order:o.order||"seq",exam:!!o.exam,examMin:o.examMin||0,results:[],answered:{},startedAt:Date.now(),timeLeft:(o.examMin||0)*60,timer:null,bankId:f.bankId,type:f.type,onlyWrong:f.onlyWrong,onlyHard:f.onlyHard,limit:o.limit,examTypes:o.examTypes||null,typeCounts:o.typeCounts||null,scoreMap:o.scoreMap||{"单选题":1,"多选题":1,"判断题":1,"填空题":1,"简答题":1,"其他":1},passScore:o.passScore||0,totalScore:o.totalScore||list.length};
+  S={list,idx:0,mode:o.mode,order:o.order||"seq",exam:!!o.exam,examMin:o.examMin||0,results:[],answered:{},startedAt:Date.now(),timeLeft:(o.examMin||0)*60,timer:null,bankId:f.bankId,type:f.type,onlyWrong:f.onlyWrong,onlyHard:f.onlyHard,judgment:f.judgment,difficulty:f.difficulty,fromTypes:$("#trainTypes")&&$("#trainTypes").style.display!=="none",limit:o.limit,examTypes:o.examTypes||null,typeCounts:o.typeCounts||null,scoreMap:o.scoreMap||{"单选题":1,"多选题":1,"判断题":1,"填空题":1,"简答题":1,"其他":1},passScore:o.passScore||0,totalScore:o.totalScore||list.length};
   $("#trainHome").style.display="none";$("#trainPlay").style.display="";
   if(S.exam&&S.examMin){S.timer=setInterval(()=>{S.timeLeft--;updateTimer();if(S.timeLeft<=0){clearInterval(S.timer);finishSession();}},1000);}
   renderQuestion();
@@ -3798,11 +3854,15 @@ function exitSession(){
   // 模拟考试同样适用，因为它们共用同一份 S。
   try { if (typeof recordSession === "function") recordSession(); } catch (e) {}
   try { save(); } catch (e) {}
+  const fromTypes=!!(S&&S.fromTypes);  // v2.21：从题型练习二级面板进入时，退出回到面板
+  const bid=S&&S.bankId?S.bankId:"all";
   $("#trainPlay").style.display="none";
   $("#trainHome").style.display="";
+  $("#trainTypes").style.display="none";
   $("#trainPlay").innerHTML="";
   S=null;
-  renderTrain();
+  if(fromTypes){renderTypesPanel(bid);}
+  else{renderTrain();}
 }
 function typeCountsInFilter(filter){
   const list=buildList(filter);
@@ -3946,7 +4006,8 @@ function renderTrain(){
       if(k==="wrong")filter.onlyWrong=true;
       if(k==="hard")filter.onlyHard=true;
       if(k==="exam"){openExamSetup(filter);return;}
-      if(k==="type"&&!filter.type){toast("请先选择题型");return;}
+      // v2.21：题型练习 — 进入二级面板（按题库统计），具体选题型再 startSession
+      if(k==="type"){renderTypesPanel(filter.bankId||"all");return;}
       const mode=(k==="recite")?"recite":"answer";
       const order=(k==="rand")?"rand":"seq";
       startSession(Object.assign({mode,order},filter));
@@ -3956,6 +4017,139 @@ function renderTrain(){
   const tc=$("#trCalc");if(tc && !tc.__bound){tc.__bound=1;tc.addEventListener("click",()=>window.__SB&&window.__SB.calcOpen&&window.__SB.calcOpen(true));}
   const tr=$("#trGoRecords");if(tr && !tr.__bound){tr.__bound=1;tr.addEventListener("click",()=>{go("records");renderRecords();});}
   const ts=$("#trGoSearch");if(ts && !ts.__bound){ts.__bound=1;ts.addEventListener("click",()=>go("search"));}
+}
+
+/* ============ v2.21：题型练习二级面板 ============
+   在 v-train 内嵌。按当前题库维度显示统计：
+   1) 练习全部   2) 单选题   3) 多选题   4) 判断题
+   5) 判断（正确）  6) 判断（错误）  7) 适中（未练习过）
+   点击任一项 → startSession({bankId, type, judgment, difficulty}) */
+function renderTypesPanel(bankId){
+  const panel=$("#trainTypes");if(!panel)return;
+  // 隐藏 trainHome，显示 typesPanel
+  $("#trainHome").style.display="none";
+  $("#trainTypes").style.display="";
+
+  // 统计（按 bankId 过滤）
+  const bid=bankId||"all";
+  const f={bankId:bid};
+  const all=buildList(f);
+  const total=all.length;
+  const singleN=all.filter(i=>i.type==="单选题").length;
+  const multiN=all.filter(i=>i.type==="多选题").length;
+  const judgeN=all.filter(i=>i.type==="判断题").length;
+  const judgeT=judgeN>0?all.filter(i=>i.type==="判断题"&&isTrueAnswer(i.a)).length:0;
+  const judgeF=judgeN>0?all.filter(i=>i.type==="判断题"&&isFalseAnswer(i.a)).length:0;
+  const mid=all.filter(i=>((i.rightCount||0)+(i.wrongCount||0))===0).length;
+
+  // 当前题库名称（用于面包屑/顶部）
+  const bank=(bid==="all")?null:(DATA.banks||[]).find(b=>b.id===bid);
+  const bankNameTxt=bank?bank.name:"全部题库";
+
+  let h='<div class="card" style="margin-bottom:14px">';
+  h+='<h2 style="display:flex;align-items:center;gap:8px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg> 题型练习</h2>';
+
+  // 题库选择条 + 返回
+  h+='<div class="types-bank-bar" style="display:flex;align-items:center;gap:10px;margin:8px 0 14px;padding:10px 12px;background:var(--soft);border-radius:10px;flex-wrap:wrap">';
+  h+='<span style="color:var(--sub);font-size:13.5px;white-space:nowrap">题库：</span>';
+  h+='<select id="typesBankSel" style="flex:1;min-width:140px;padding:8px 12px;border:1px solid var(--line);border-radius:8px;background:#fff;font-size:14px"></select>';
+  h+='<button class="btn ghost" id="typesBack" style="padding:8px 14px;white-space:nowrap">‹ 返回练习中心</button>';
+  h+='</div>';
+
+  // 当前题库的简要数字卡
+  h+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;padding:12px 14px;background:var(--grad-blue);border-radius:12px;color:#fff">';
+  h+='<div style="flex:1"><div style="font-size:13px;opacity:.9">'+esc(bankNameTxt)+'</div>';
+  h+='<div style="font-size:24px;font-weight:800">'+total+' <span style="font-size:13px;font-weight:500">题</span></div></div>';
+  h+='<div style="display:flex;gap:14px;font-size:12.5px;opacity:.95">';
+  if(singleN)h+='<span>单选 '+singleN+'</span>';
+  if(multiN)h+='<span>多选 '+multiN+'</span>';
+  if(judgeN)h+='<span>判断 '+judgeN+'</span>';
+  h+='</div></div>';
+
+  // 6 个入口
+  h+='<div class="types-list">';
+
+  // 1) 练习全部
+  h+=rowHTML("all","练习全部","按题型顺序练习全部试题",total,"📚");
+
+  // 2) 单选题
+  if(singleN){
+    h+=rowHTML("single","单选题","按题号顺序练习所有单选题",singleN,"🅰");
+  }
+
+  // 3) 多选题
+  if(multiN){
+    h+=rowHTML("multi","多选题","按题号顺序练习所有多选题",multiN,"☑");
+  }
+
+  // 4) 判断题
+  if(judgeN){
+    h+=rowHTML("judge","判断题","按题号顺序练习所有判断题",judgeN,"🛡");
+  }
+
+  // 5) 判断题分对错练习（子组）
+  if(judgeN){
+    h+='<div class="type-group">判断题分对错练习</div>';
+    h+=rowHTML("judgeT","判断（正确）","判断题答案为「正确」的题",judgeT,"✓",true);
+    h+=rowHTML("judgeF","判断（错误）","判断题答案为「错误」的题",judgeF,"✕",true);
+  }
+
+  // 6) 试题分难易练习
+  h+='<div class="type-group">试题分难易练习</div>';
+  h+=rowHTML("mid","适中","未练习过的题（rightCount+wrongCount=0）",mid,"🌿",true);
+
+  h+='</div>';  // end types-list
+  h+='</div>';  // end card
+
+  panel.innerHTML=h;
+
+  // 题库选择器：填充选项
+  const sel=$("#typesBankSel");
+  sel.innerHTML='<option value="all"'+(bid==="all"?' selected':'')+'>全部题库（'+(DATA.items||[]).length+' 题）</option>'
+    +(DATA.banks||[]).map(b=>'<option value="'+esc(b.id)+'"'+(b.id===bid?' selected':'')+'>'+esc(b.name)+'（'+bankItems(b.id).length+' 题）</option>').join("");
+  sel.addEventListener("change",e=>renderTypesPanel(e.target.value));
+
+  // 返回
+  $("#typesBack").addEventListener("click",()=>{
+    $("#trainTypes").style.display="none";
+    renderTrain();
+  });
+
+  // 每个 type-row 点击 → 进入对应练习
+  panel.querySelectorAll(".type-row").forEach(row=>{
+    row.addEventListener("click",()=>{
+      const k=row.dataset.k;
+      const rbid=row.dataset.bank;
+      const filter={bankId:rbid};
+      if(k==="all"){
+        // 全部：靠 buildList 默认按所有题，但通过 type 排序固定
+        // 不传 type，让 startSession 按 TYPES 顺序自然展开
+        startSession({mode:"answer",order:"seq",bankId:rbid});
+      } else if(k==="single"){
+        startSession({mode:"answer",order:"seq",bankId:rbid,type:"单选题"});
+      } else if(k==="multi"){
+        startSession({mode:"answer",order:"seq",bankId:rbid,type:"多选题"});
+      } else if(k==="judge"){
+        startSession({mode:"answer",order:"seq",bankId:rbid,type:"判断题"});
+      } else if(k==="judgeT"){
+        startSession({mode:"answer",order:"seq",bankId:rbid,type:"判断题",judgment:"true"});
+      } else if(k==="judgeF"){
+        startSession({mode:"answer",order:"seq",bankId:rbid,type:"判断题",judgment:"false"});
+      } else if(k==="mid"){
+        startSession({mode:"answer",order:"seq",bankId:rbid,difficulty:"mid"});
+      }
+    });
+  });
+
+  function rowHTML(k,title,sub,n,ic,isGroup){
+    return '<div class="type-row" data-k="'+k+'" data-bank="'+esc(bid)+'"'
+      + (isGroup?' style="padding-left:30px"':'') + '>'
+      + '<div style="font-size:22px;width:32px;text-align:center;flex-shrink:0">'+ic+'</div>'
+      + '<div style="flex:1"><div class="t-title">'+title+'</div>'
+      + '<div class="t-sub">'+sub+'</div></div>'
+      + '<div class="t-num">'+n+' <span>题</span></div>'
+      + '</div>';
+  }
 }
 $("#btnAddBank").addEventListener("click",()=>{
   prompt2("新建题库","输入题库名称","新题库",(name)=>{
