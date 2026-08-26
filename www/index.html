@@ -1680,44 +1680,19 @@ function doSearch(){
   // 【v2.18 关键修复】跟网页版一致：先用【完整 query】评分！
   //   网页版直接 scoreItem(c, q)，Q.includes(完整query) → 原题整段命中 = 满分 → 排第 1。
   //   手机版之前只对 10 字块评分，整段匹配能力被切碎，噪声题靠通用词块也能凑分 → 原题被挤到第 7。
-  // 【v2.21】再增强：① 阈值 15→10（更宽松，让 fuzzyScore≥0.5 也能进满分倍数）
-  //   ② 加 3 个"原题指纹"强信号：题干前 12 字子串命中 Q / 滑窗 fuzzy≥0.7 / ngram3Sim≥0.55
-  //     解决 OCR 错 1-2 字或 query 被截短时，原题也能绝对排第一。
+  //   现在：完整 query 整段命中/高相似 → 直接给极高分；否则才退回分块容错（防 OCR 错 1-2 字）。
+  // 【v2.22 回滚】v2.21 的三重"指纹"强信号（阈值 15→10 + 前12字/fuzzy/ngram 加极大分）让
+  //   多道"通用词题/题干模式相似的题"同步进入高分档，原题领先优势被稀释，正确匹配率反而下降。
+  //   回滚为 v2.20 逻辑：完整 query 严格评分（阈值 15）+ 分块容错，保持原题绝对领先。
   const scoreBlocks=(c)=>{
     if(blocks.length<=1)return scoreItem(c,primaryQ);
     // ---- 1) 完整 query 评分（网页版同款逻辑）----
     //   20 = 题干精确命中满分(10×STEM_W=20)；fuzzy 高分(>0.75)也算整段高相似
     const fullScore=scoreItem(c,q);
-    if(fullScore>=10){  // v2.21：15→10（让 fuzzyScore≈0.5 也能进满分倍数，OCR 错 1 字也能命中）
+    if(fullScore>=15){
       // 整段命中/高相似 → 放大 100 倍，绝对排第一（模拟网页版"满分优先"）
       return fullScore*100;
     }
-    // ---- 1.5) v2.21：原题三重"指纹"强信号 ----
-    //   即使完整 query 没匹配（OCR 错 1-2 字 / 加了杂质 / 被截短），原题特征词仍能定位
-    let trueTitle=0;
-    if(q.length>=6){
-      // (a) 取 query 题干头部（前 12 字）作"题干指纹"，看 Q 是否包含
-      const prefix = q.length>=12 ? q.slice(0,12) : q;
-      if(c.Q.includes(prefix)){
-        trueTitle=Math.max(trueTitle, 8000);  // 题干头部完全命中（很可能是原题）
-      } else if(prefix.length>=6){
-        // 子串不命中：在 Q 前部 36 字内做滑窗 fuzzy，找最接近 prefix 的子串
-        const qHead = c.Q.slice(0, Math.min(36, c.Q.length));
-        let bestF=0;
-        for(let i=0;i+prefix.length<=qHead.length;i++){
-          const sub=qHead.slice(i,i+prefix.length);
-          const d=editDist(prefix,sub);
-          const f=1-d/prefix.length;
-          if(f>bestF){bestF=f;if(bestF>=0.97)break;}
-        }
-        if(bestF>=0.85) trueTitle=Math.max(trueTitle,7000);
-        else if(bestF>=0.7) trueTitle=Math.max(trueTitle,4500);
-      }
-      // (b) ngram3Sim 题干核心词覆盖率 ≥ 0.55 → 触发强信号
-      const nsim=ngram3Sim(c.Q, q);
-      if(nsim>=0.55) trueTitle=Math.max(trueTitle, 6000*nsim);
-    }
-    if(trueTitle>0) return trueTitle;
     // ---- 2) 否则分块容错（OCR 有错字场景）----
     let total=0, used=0;
     for(let bi=0;bi<blocks.length;bi++){
