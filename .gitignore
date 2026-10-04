@@ -19,3 +19,13 @@ _bak_*/
 *.v2bak
 *.v3bak
 *.bak_*
+
+# 本地临时文件（提交信息草稿、推送/抓包日志）
+_commitmsg*.txt
+_push.log
+_trace.log
+_runs.json
+_art*.json
+_run*.json
+_ipa.zip
+_exe.bin
