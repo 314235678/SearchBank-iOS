@@ -228,6 +228,18 @@
     });
   };
 
+  /* v3.0.2 新增：剪贴板「富探测」。
+     since = 上次见到的 changeCount；peek = 只问计数、不读内容。
+     原生侧在 since === 当前 changeCount 时**完全不碰剪贴板内容**，
+     因此轮询不会反复触发 iOS 的「允许粘贴」弹窗。
+     返回 { changeCount, changed, kind: "text"|"image"|"empty"|"same", text?, dataUrl? } */
+  window.__SB.readClipboardRich = function (since, peek) {
+    return post("readClipboardRich", {
+      since: (since == null ? -1 : since),
+      peek: !!peek
+    });
+  };
+
   window.__SB.openExternal = function (url) {
     return post("openExternal", { url: url }).then(function (r) {
       return !(r && r.error);
@@ -241,6 +253,42 @@
   window.__SB.aiChat = function (opts) { return post("aiChat", opts || {}); };
 
   /* ==================================================================
+   * 1.9 「数据就绪」闸门
+   * ----------------------------------------------------------------
+   * 网页初始化时会 `await desktopFS.readData()` 把沙盒 data.json 读进 DATA
+   * （`DATA = mergeData(disk, load())`），这是**异步**的。
+   * 而 localStorage 只有 5MB，装不下 11k 题的题库（data.json 有 8MB），
+   * 所以刚启动那一刻 DATA 里的很可能只是残缺的镜像。
+   *
+   * 冷启动场景（快捷指令 → searchbank://fab-clipboard）恰恰来得比它早：
+   * 若立刻 doSearch，就会搜到残缺库 —— 用户看到的是「打开了但没结果」，
+   * 和「压根没搜」几乎一样难以分辨。所以深链动作统一等数据就绪再跑。
+   *
+   * 就绪信号取「网页第一次 readData() 拿到结果之后再过一拍」：
+   * 用 setTimeout(0) 而不是直接置位，是为了让网页自己的
+   * `DATA = mergeData(...)` 那段 microtask 先执行完。
+   * ================================================================== */
+  var __dataReadyFlag = false;
+  var __dataWaiters = [];
+
+  function markDataReady() {
+    if (__dataReadyFlag) return;
+    __dataReadyFlag = true;
+    var ws = __dataWaiters.slice();
+    __dataWaiters = [];
+    ws.forEach(function (f) { try { f(); } catch (e) {} });
+  }
+
+  function whenDataReady(fn, maxWaitMs) {
+    if (__dataReadyFlag || !native) { fn(); return; }   // 纯浏览器环境无需等待
+    var done = false;
+    var run = function () { if (done) return; done = true; fn(); };
+    __dataWaiters.push(run);
+    // 兜底：万一网页不再调 readData（页面逻辑变了），等这么久也照样执行
+    setTimeout(run, maxWaitMs || 2500);
+  }
+
+  /* ==================================================================
    * 2. fsBridge —— 网页的数据持久化
    *    网页语义：readData() → {items,banks,...}；writeData(obj) 落盘
    *    落到 iOS：Documents/SearchBank/data.json（与旧版格式完全一致）
@@ -250,7 +298,12 @@
       return window.__SB.loadData().then(function (t) {
         if (!t) return null;
         try { return JSON.parse(t); } catch (e) { return null; }
-      }).catch(function () { return null; });
+      }).catch(function () { return null; })
+        .then(function (v) {
+          // 沙盒数据已交付 → 等网页自己的 `DATA = mergeData(...)` 跑完（下一拍）再放行深链
+          setTimeout(markDataReady, 0);
+          return v;
+        });
     },
     writeData: function (data) {
       var text;
@@ -320,6 +373,56 @@
   var _clipTimer = null;
   var _clipCbs = [];
   var _lastClip = "";
+  /* 剪贴板「变化计数」。iOS 16+ 读他人写入的剪贴板会弹一次「允许粘贴」，
+     所以不能每轮都去读内容 —— 先用 changeCount 判断变没变（不读内容、不弹窗），
+     真的变了才读一次。 */
+  var _lastClipCount = -1;
+
+  /* ---- 剪贴板两条通路（快捷指令 / 剪贴板监听）的互相去重 ----
+     两者都会读到同一段文字：快捷指令是「拷贝 → 打开 App」，
+     监听是每 1.2s 轮询。不管的话会搜两遍（结果闪两下），
+     监听还会多弹一次「允许粘贴」。
+     但**不能只按文字去重**：监听走的是网页那套启发式过滤，可能把某段文字
+     过滤掉、压根没搜；这时若快捷指令也跳过，就一次都不搜了 ——
+     正好复现用户报的「只打开软件不搜题」。
+     所以判据用「真的执行过搜索」：网页每跑一次 doSearch 就记一笔。 */
+  var _lastSearchAt = 0;
+  var _lastSearchText = "";
+  var CLIP_DUP_MS = 3000;
+
+  function normClipText(s) {
+    return String(s == null ? "" : s).replace(/\s+/g, " ").trim();
+  }
+
+  function hookSearchTime() {
+    if (!isFn("doSearch") || window.doSearch.__sbTimed) return;
+    var orig = window.doSearch;
+    var wrapped = function () {
+      _lastSearchAt = Date.now();
+      try {
+        _lastSearchText = normClipText(isFn("readSearchText") ? window.readSearchText() : "");
+      } catch (e) { _lastSearchText = ""; }
+      return orig.apply(this, arguments);
+    };
+    wrapped.__sbTimed = true;
+    window.doSearch = wrapped;
+  }
+
+  /* 监听已经在最近 3 秒内用同一段文字搜过了吗？ */
+  function watchAlreadySearched(t) {
+    return normClipText(t) === _lastSearchText &&
+           (Date.now() - _lastSearchAt) < CLIP_DUP_MS;
+  }
+
+  /* 让监听把当前剪贴板内容记为「已见」。
+     否则快捷指令刚处理完，监听下一拍又会把同一段内容当成新内容 ——
+     既多搜一次，还会额外弹一次「允许粘贴」。 */
+  function syncClipWatchCursor() {
+    if (!_clipTimer) return;
+    window.__SB.readClipboardRich(-1, true).then(function (r) {
+      if (r && r.changeCount != null) _lastClipCount = r.changeCount;
+    }).catch(function () {});
+  }
 
   /* ==================================================================
    * 3.0 整页截图净化（Full-page sanitize）
@@ -664,6 +767,30 @@
     try { localStorage.setItem("sb_ocr_page_clean", v ? "1" : "0"); } catch (e) {}
   }
 
+  /* 剪贴板里出现新图片（截图后「拷贝」）→ 离线识别 + 整页净化 → 直接搜题。
+     刻意复用 v1.0.61 那套「按坐标重排 + 题目区净化」，
+     和「图片识别」页跑的是同一条链路，结果一致；
+     这样用户在别的 App 里截完图拷一下，回到 App 就已经是搜索结果的页面了。 */
+  function handleClipImage(dataUrl) {
+    toast("剪贴板有新图片，正在离线识别…");
+    window.__SB.ocrBlocks(dataUrl).then(function (res) {
+      var rows = null;
+      try {
+        var s = sanitizePage(res);
+        if (s && s.plainRows && s.plainRows.length) rows = s.plainRows;
+        if (s && s.stats) showCleanInfo(s.stats);
+      } catch (e) {
+        console.warn("[bridge] 剪贴板图片净化异常，退回原始结果：", e);
+      }
+      if (!rows) rows = (res.blocks || []).map(function (b) { return { text: b.text }; });
+      var text = rows.map(function (r) { return r.text || ""; }).join("\n").trim();
+      if (!text) { toast("剪贴板图片里没识别到文字"); return; }
+      swapToSearch(text);
+    }).catch(function (e) {
+      toast("剪贴板图片识别失败：" + ((e && e.message) || e));
+    });
+  }
+
   window.umiBridge = {
     findEngine: function () {
       return Promise.resolve({ ok: true, path: "iOS Vision（系统内置，离线）" });
@@ -739,25 +866,49 @@
     },
 
     launchGui: function () {
-      toast("iOS 上不需要外部 OCR 程序 —— 识别由系统离线完成");
-      return Promise.resolve({ ok: false });
+      /* iOS 上没有（也不需要）Umi-OCR 桌面程序 —— 识别由系统离线完成。
+         ⚠️ 这里**必须返回 ok**：网页的「开始监听」按钮拿到 !ok 就直接 return，
+         连剪贴板监听都开不起来 —— 手机上这个按钮形同虚设就是这个原因。
+         返回 ok 让流程继续走到 startClipboardWatch()。 */
+      if (native) return Promise.resolve({ ok: true, alreadyRunning: false, local: true });
+      return Promise.resolve({ ok: false, error: "当前不是桌面版环境" });
     },
 
-    /* 剪贴板监听：iOS 没有全局剪贴板事件，用轮询原生剪贴板实现。
-       在别的 App 里拷贝题干 → 回到搜题平台自动填入并搜索。 */
+    /* 剪贴板监听：iOS 没有全局剪贴板事件，用原生轮询实现。
+       文字：在别的 App 里复制题干 → 回到这里自动填入并搜题（网页的
+             onClipboardText 回调里有成套的「像不像题干」过滤，直接复用）。
+       图片：截图后在相册/预览里「拷贝」→ 这里离线识别 + 整页净化 → 直接搜题，
+             不用再手动进「图片识别」页。 */
     startClipboardWatch: function () {
       if (_clipTimer) return Promise.resolve({ ok: true });
-      window.__SB.readClipboard().then(function (t) { _lastClip = t || ""; });
-      _clipTimer = setInterval(function () {
-        window.__SB.readClipboard().then(function (t) {
-          t = (t || "").trim();
+
+      function tick() {
+        window.__SB.readClipboardRich(_lastClipCount, false).then(function (r) {
+          if (!r || r.changeCount == null) return;
+          if (r.changed === false) return;          // 没变化：连内容都没读，不会弹窗
+          _lastClipCount = r.changeCount;
+          if (r.kind === "image" && r.dataUrl) { handleClipImage(r.dataUrl); return; }
+          var t = String(r.text || "").trim();
+          // 记一下「已经读过」，避免同一内容被反复处理
           if (!t || t === _lastClip) return;
           _lastClip = t;
+          // 交给网页自己的 onClipboardText 回调（它有一整套「像不像题干」过滤），
+          // 由它去 go / setSearchText / doSearch
           _clipCbs.forEach(function (cb) { try { cb({ text: t }); } catch (e) {} });
         }).catch(function () {});
-      }, 1500);
-      toast("已开启剪贴板监听：在别的 App 里拷贝题干，回到这里自动搜题");
-      return Promise.resolve({ ok: true });
+      }
+
+      // 先 peek 一次：把「开启监听之前就在剪贴板里的内容」登记为已见，
+      // 免得刚点开启就把上一次复制的旧题目搜一遍。
+      return window.__SB.readClipboardRich(-1, true).then(function (r) {
+        if (r && r.changeCount != null) _lastClipCount = r.changeCount;
+        _clipTimer = setInterval(tick, 1200);
+        toast("已开始监听剪贴板：复制题干会自动搜题，复制题目截图会自动识别");
+        return { ok: true };
+      }).catch(function () {
+        _clipTimer = setInterval(tick, 1200);
+        return { ok: true };
+      });
     },
     stopClipboardWatch: function () {
       if (_clipTimer) { clearInterval(_clipTimer); _clipTimer = null; }
@@ -1326,10 +1477,107 @@
     };
   }
 
+  /* 8.6 图片识别页的「图片来源」→ 系统相册 / 相机
+
+     问题（用户报的）：点「图片识别搜题」那个取图框，弹出的是「文件」App，
+     里面根本找不到刚截的图，等于没法选图。
+
+     原因：电脑版网页的取图入口是
+        <div id="imgDrop"> 里藏着的 <input type="file" id="imgInput" accept="image/*">
+        $("#imgDrop").onclick = () => $("#imgInput").click()
+     在 iOS 上 <input type=file> 会交给 WKWebView 的文件面板 →「文件」App。
+     旧手机版是自己在页面上做了 FAB（拍照/相册/剪贴板）按钮，走的是相册；
+     新版是从**电脑版网页**重建的，电脑版没有 FAB，所以这条口子漏接了。
+
+     改法：把取图框的点击改成打开系统相册（PHPicker，截屏就在里面）；
+     再补一个「拍照识别」按钮 —— 网页版拿相机拍纸质题很常用，
+     而电脑版页面本身没有相机入口。 */
+  function patchOcrImage() {
+    if (!native) return;
+
+    function isCancel(msg) {
+      return /取消|cancel/i.test(String(msg || ""));
+    }
+
+    function feed(dataUrl, name) {
+      if (!dataUrl) return;
+      var f = dataURLtoFile(dataUrl, name || "photo.jpg");
+      if (!f) { toast("图片数据解析失败"); return; }
+      if (isFn("handleImage")) window.handleImage(f);
+      else toast("当前版本不支持图片识别");
+    }
+
+    function grab(promise, what) {
+      promise.then(function (x) { feed(x, what + ".jpg"); })
+        .catch(function (err) {
+          var m = (err && err.message) || String(err);
+          if (isCancel(m)) return;      // 用户自己取消的，别弹提示烦人
+          toast(what + "失败：" + m);
+        });
+    }
+
+    var drop = document.getElementById("imgDrop");
+    if (drop && !drop.__sbBoundImg) {
+      drop.__sbBoundImg = true;
+      drop.addEventListener("click", function (e) {
+        e.preventDefault();
+        e.stopImmediatePropagation();   // 压掉网页自己的 input.click()
+        grab(window.__SB.pickImage(), "打开相册");
+      }, true);
+    }
+
+    // 兜底：就算还有别的路径碰到这个 input，也别再弹「文件」App
+    var inp = document.getElementById("imgInput");
+    if (inp) inp.click = function () {};
+
+    // 补一个拍照按钮（插在「✂ 截屏识别」后面）
+    var shot = document.getElementById("ocrShot");
+    if (shot && shot.parentNode && !document.getElementById("sbOcrCam")) {
+      var b = document.createElement("button");
+      b.className = "btn";
+      b.id = "sbOcrCam";
+      b.title = "调相机拍题目，再离线识别（图片不出本机）";
+      b.textContent = "📷 拍照识别";
+      b.addEventListener("click", function () {
+        grab(window.__SB.captureImage(), "拍照");
+      });
+      shot.parentNode.insertBefore(b, shot.nextSibling);
+    }
+  }
+
   /* ==================================================================
    * 9. 设置项文案／提示本地化
    * ================================================================== */
   function localizeSettings() {
+    /* 搜索页的「▶ 开始 Umi-OCR + 监听」在手机上要说人话 ——
+       iOS 上没有 Umi-OCR 这个桌面程序，识别由系统离线完成；
+       这个按钮现在的实际作用是「开启剪贴板监听」（复制题干自动搜题）。 */
+    var bso = document.getElementById("btnScreenOcr");
+    if (bso) {
+      bso.textContent = "▶ 开启剪贴板监听";
+      bso.title = "可选功能（默认不开）。开启后在别的 App 里复制题干文字、或复制一张题图，" +
+                  "回到本 App 会自动识别并搜题。注意：按电源键截图是保存到相册、不进剪贴板，" +
+                  "所以「截图搜题」请用快捷指令；两者同时开也不会重复搜题。";
+      /* 顺带接管点击：网页原来的处理会先弹「启动 Umi-OCR…」、
+         最后又弹「Umi-OCR 已启动，请框选题目」，在手机上全是误导，
+         而且会把我们 startClipboardWatch 的正确提示覆盖掉。 */
+      if (native && !bso.__sbWatchBound) {
+        bso.__sbWatchBound = true;
+        bso.addEventListener("click", function (e) {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          window.umiBridge.startClipboardWatch().then(function (c) {
+            if (!c || !c.ok) { toast("启动剪贴板监听失败"); return; }
+            bso.style.display = "none";
+            var st = document.getElementById("btnClipboardStop");
+            if (st) st.style.display = "";
+          });
+        }, true);
+      }
+    }
+    var bstop = document.getElementById("btnClipboardStop");
+    if (bstop) bstop.title = "停止剪贴板监听（之后需要手动点搜索）";
+
     var sel = document.getElementById("setEngine");
     if (sel) {
       var o1 = sel.querySelector('option[value="umi"]');
@@ -1371,14 +1619,6 @@
     }
     var shot = document.getElementById("ocrShot");
     if (shot) shot.title = "取相册里最新一张图识别（先按「电源+音量上」截屏，再回来点这里）";
-
-    var so = document.getElementById("btnScreenOcr");
-    if (so) {
-      so.innerHTML = "▶ 开启剪贴板监听";
-      so.title = "在别的 App 里拷贝题干文字，回到这里自动填入并搜题。做完题点「停止监听」结束。";
-    }
-    var stop = document.getElementById("btnClipboardStop");
-    if (stop) stop.title = "停止剪贴板监听";
   }
 
   /* ==================================================================
@@ -1539,22 +1779,52 @@
       }
 
       var run = function () {
-        if (path === "fab-clip" || path === "clip") {
+        /* ⚠️ 别名必须写全。用户的「快捷指令」用的是 searchbank://fab-clipboard
+           （截屏 → 提取文本 → 拷贝至剪贴板 → 打开该链接）。
+           v3.0 首版只认 fab-clip / clip，把 fab-clipboard 漏了 →
+           落到最后的兜底分支 swapToSearch("") → 只切到搜索页、框是空的，
+           表现就是「只打开软件不搜题」。旧版 v2.22 是写了这个别名的。 */
+        if (path === "fab-clipboard" || path === "fab-clip" || path === "clip") {
           return window.__SB.readClipboard().then(function (t) {
             t = (t || "").trim();
-            if (!t) { toast("剪贴板是空的"); return; }
-            swapToSearch(t);
+            if (!t) { toast("剪贴板是空的（请先复制题干）"); return; }
+            /* 与「剪贴板监听」去重：只有当监听**确实用这段文字搜过**时才跳过。
+               监听那套启发式过滤可能把文字滤掉而没搜 —— 那种情况下这里必须照搜，
+               否则就变成「一次都不搜」。 */
+            if (watchAlreadySearched(t)) {
+              syncClipWatchCursor();
+              return;
+            }
+            // 等沙盒数据装载完再搜，否则冷启动会搜到残缺库（看着像"没结果"）
+            whenDataReady(function () { swapToSearch(t); });
+            // 让监听把这段内容记为已见，避免它稍后重复处理（含多弹一次「允许粘贴」）
+            syncClipWatchCursor();
           });
         }
         if (path === "fab-camera") {
-          return window.__SB.captureImage().then(function (x) { if (x) ocrDataURL(x); });
+          return window.__SB.captureImage().then(function (x) {
+            if (x) whenDataReady(function () { ocrDataURL(x); });
+          });
         }
         if (path === "fab-album") {
-          return window.__SB.pickImage().then(function (x) { if (x) ocrDataURL(x); });
+          return window.__SB.pickImage().then(function (x) {
+            if (x) whenDataReady(function () { ocrDataURL(x); });
+          });
         }
-        if (path === "search") { swapToSearch(qs.q || ""); return; }
-        if (path === "ocr") return;
-        swapToSearch(qs.q || "");
+        // 旧版还有这两个别名：截屏后在相册里取最新一张来识别
+        if (path === "shot" || path === "ocr-latest") {
+          if (isFn("go")) window.go("ocr");
+          return window.__SB.pickLatestPhoto().then(function (x) {
+            if (x) whenDataReady(function () { ocrDataURL(x); });
+          });
+        }
+        if (path === "search") { whenDataReady(function () { swapToSearch(qs.q || ""); }); return; }
+        if (path === "ocr") { if (isFn("go")) window.go("ocr"); return; }
+        if (path === "launch" || path === "" || path === "home") {
+          if (isFn("go")) window.go("home");
+          return;
+        }
+        whenDataReady(function () { swapToSearch(qs.q || ""); });
       };
 
       if (document.readyState === "loading") _urlQueue.push(run);
@@ -1601,7 +1871,10 @@
     looksLikeUIRow: looksLikeUIRow,
     cropImageDataURL: cropImageDataURL,
     maybeAutoAi: maybeAutoAi,
-    isFn: isFn
+    isFn: isFn,
+    // 供无头测试直接驱动「内置题库装载」这条链路
+    seedFromBundle: seedFromBundle,
+    isDataReady: function () { return __dataReadyFlag; }
   };
   function syncNativeOcrSettings() {
     if (!native) return;
@@ -1612,31 +1885,51 @@
     if (layout) window.__SB.setSetting("sb_ocr_single_col", !!layout.checked);
   }
 
+  /* 首次安装时把打进 App 的内置题库（www/搜题题库.json，6465 题）装进 DATA。
+     v3.0 首版这里照抄了网页桌面版写法，两个地方都错，导致内置题库**从来没成功加载过**：
+       ① `var D = window.DATA;` —— 网页是 `let DATA = load()`，顶层 let 进的是
+          「全局词法环境」，**不在 window 上** → D 恒为 undefined → if 判定失败。
+       ② `fetch("搜题题库.json")` —— WKWebView 用 file:// 加载页面，
+          WebKit 会拦掉 file:// 的 fetch → 连内容都取不到。
+     改用原生 getBundledBank（直接读包内文件），并按裸标识符访问 DATA。
+     ⚠️ 注意不能给 DATA 做 window 别名：网页会 `DATA = mergeData(...)` **整体重赋值**，
+        别名会立刻失效。 */
   function seedFromBundle() {
-    if (!native) return;
+    if (!native) return Promise.resolve();
     var seeded = false;
     try { seeded = localStorage.getItem("sb_seeded") === "1"; } catch (e) {}
-    if (seeded) return;
-    window.__SB.loadData().then(function (t) {
+
+    if (seeded) { markDataReady(); return Promise.resolve(); }
+
+    return window.__SB.loadData().then(function (t) {
       if (t && t.length > 100) {
         try { localStorage.setItem("sb_seeded", "1"); } catch (e) {}
-        return;
+        return null;
       }
-      return fetch("搜题题库.json").then(function (r) { return r.text(); })
-        .then(function (txt) {
-          var bank = JSON.parse(txt);
-          var D = window.DATA;
-          if (bank && Array.isArray(bank.items) && bank.items.length && D) {
-            D.items = bank.items;
-            if (Array.isArray(bank.banks)) D.banks = bank.banks;
-            if (isFn("save")) window.save();
-            if (isFn("renderHome")) window.renderHome();
-            if (isFn("fillCatFilter")) window.fillCatFilter();
-            toast("已载入本地题库 " + bank.items.length + " 题（离线可用）");
-          }
-          try { localStorage.setItem("sb_seeded", "1"); } catch (e) {}
-        });
-    }).catch(function () {});
+      return window.__SB.getBundledBank().then(function (txt) {
+        if (!txt) return;
+        var bank;
+        try { bank = JSON.parse(txt); } catch (e) { return; }
+        if (!bank || !Array.isArray(bank.items) || !bank.items.length) return;
+        try {
+          DATA.items = bank.items;                      // 裸标识符：全局词法环境可达
+          if (Array.isArray(bank.banks)) DATA.banks = bank.banks;
+        } catch (e) {
+          console.warn("[bridge] 内置题库装载失败（DATA 不可达）：", e);
+          return;
+        }
+        if (isFn("save")) window.save();
+        if (isFn("renderHome")) window.renderHome();
+        if (isFn("fillCatFilter")) window.fillCatFilter();
+        if (isFn("fillBankSelects")) window.fillBankSelects();
+        toast("已载入内置题库 " + bank.items.length + " 题（离线可用）");
+        try { localStorage.setItem("sb_seeded", "1"); } catch (e) {}
+      });
+    }).catch(function (e) {
+      console.warn("[bridge] 内置题库装载异常：", e);
+    }).then(function () {
+      markDataReady();
+    });
   }
 
   function boot() {
@@ -1646,8 +1939,10 @@
     patchTesseract();
     patchExport();
     patchImport();
+    patchOcrImage();
     patchFolderUI();
     hookSearchHistory();
+    hookSearchTime();      // 记录「最近一次真正搜过的文字」，用于剪贴板两条通路去重
 
     // 手机端的两条主线：AI 优先 + 整页净化
     hookAiCrop();

@@ -23,7 +23,14 @@
     // pickFiles 返回什么（模拟用户从「文件」App 选到的文件）
     pickFilesResult: [],
     // 模拟原生沙盒里暂存的待导入备份（原始字节）；由 readImportChunk 分块吐出
-    stagedBytes: null
+    stagedBytes: null,
+    // 模拟相册/相机/最新截图返回的图片（1x1 PNG，只要能被 dataURLtoFile 认成 image/*）
+    imageResult: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==",
+    clipboard: "",
+    // 剪贴板富探测：changeCount 门控 + 内容
+    clip: { changeCount: 1, kind: "text", text: "" },
+    // 内置题库（getBundledBank）返回的内容
+    bundledBank: '{"items":[],"banks":[]}'
   };
 
   function bytesToB64(u8) {
@@ -67,9 +74,6 @@
             case "dataPath":
               respond(msg.id, { path: "/var/mobile/Containers/.../SearchBank/data.json" });
               break;
-            case "getBundledBank":
-              respond(msg.id, { text: '{"items":[],"banks":[]}' });
-              break;
             case "aiRecognize":
             case "aiAsk":
             case "aiChat":
@@ -78,6 +82,34 @@
               break;
             case "readClipboard":
               respond(msg.id, { text: window.__STUB.clipboard || "" });
+              break;
+            /* 剪贴板富探测：模拟原生的 changeCount 门控行为 ——
+               since 与当前一致或 peek 时，**不回内容**（真机上这步不读剪贴板、
+               不会触发「允许粘贴」弹窗）。 */
+            case "readClipboardRich":
+              (function () {
+                var c = window.__STUB.clip || {};
+                var since = payload.since == null ? -1 : payload.since;
+                if (payload.peek || (since >= 0 && since === c.changeCount)) {
+                  respond(msg.id, {
+                    changeCount: c.changeCount, changed: false, kind: "same"
+                  });
+                  return;
+                }
+                var r = { changeCount: c.changeCount, changed: true, kind: c.kind || "empty" };
+                if (c.kind === "text") r.text = c.text || "";
+                if (c.kind === "image") r.dataUrl = c.dataUrl || window.__STUB.imageResult;
+                respond(msg.id, r);
+              })();
+              break;
+            case "getBundledBank":
+              respond(msg.id, { text: window.__STUB.bundledBank || "" });
+              break;
+            // 图片来源：相册 / 相机 / 相册最新一张
+            case "pickImage":
+            case "captureImage":
+            case "pickLatestPhoto":
+              respond(msg.id, { dataUrl: window.__STUB.imageResult });
               break;
             case "writeClipboard":
             case "setSetting":

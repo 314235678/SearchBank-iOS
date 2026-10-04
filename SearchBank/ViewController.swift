@@ -223,6 +223,9 @@ class ViewController: UIViewController,
         // v2.13：原生剪贴板桥接（WKWebView 用 file:// 协议时 navigator.clipboard 不可用）
         case "readClipboard":
             handleReadClipboard(id: id)
+        // v3.0.2：剪贴板富探测（changeCount 门控，支持文本与图片）
+        case "readClipboardRich":
+            handleReadClipboardRich(id: id, payload: payload)
         case "writeClipboard":
             handleWriteClipboard(id: id, payload: payload)
         default:
@@ -621,6 +624,67 @@ class ViewController: UIViewController,
     private func handleReadClipboard(id: String) {
         let s = UIPasteboard.general.string ?? ""
         respond(id: id, result: ["text": s])
+    }
+
+    /// 剪贴板富探测（v3.0.2）。手机版「复制题干自动搜题」「复制截图自动识别」靠它。
+    ///
+    /// 为什么不是简单轮询 `UIPasteboard.general.string`：
+    ///   iOS 16 起，读取**别人写入**的剪贴板内容会弹一次系统「允许粘贴」。
+    ///   每 1.2 秒读一次 = 每 1.2 秒弹一次，完全没法用。
+    ///   而 `changeCount` 只是个计数，读它**不碰内容、不弹窗**，
+    ///   所以这里先用 changeCount 门控：没变化就直接返回，连内容都不读。
+    ///
+    /// 参数：since = 上次见到的 changeCount；peek = true 时只回计数、绝不读内容。
+    /// 返回：{changeCount, changed, kind: "same"|"empty"|"text"|"image", text?, dataUrl?}
+    private func handleReadClipboardRich(id: String, payload: [String: Any]) {
+        let pb = UIPasteboard.general
+        let count = pb.changeCount
+        let since = payload["since"] as? Int ?? -1
+        let peek = payload["peek"] as? Bool ?? false
+
+        if peek {
+            respond(id: id, result: ["changeCount": count, "changed": false, "kind": "same"])
+            return
+        }
+        // 计数没变 → 连内容都不读（这一步是「不反复弹窗」的关键）
+        if since >= 0 && since == count {
+            respond(id: id, result: ["changeCount": count, "changed": false, "kind": "same"])
+            return
+        }
+
+        // 用 hasStrings / hasImages 判类型，不读内容（也不会弹窗）
+        if pb.hasStrings, let s = pb.string, !s.isEmpty {
+            respond(id: id, result: [
+                "changeCount": count, "changed": true, "kind": "text", "text": s
+            ])
+            return
+        }
+        if pb.hasImages, let img = pb.image, let dataUrl = downscaleJPEG(img) {
+            respond(id: id, result: [
+                "changeCount": count, "changed": true, "kind": "image", "dataUrl": dataUrl
+            ])
+            return
+        }
+        respond(id: id, result: ["changeCount": count, "changed": true, "kind": "empty"])
+    }
+
+    /// 把剪贴板图片缩到最长边 1600 再转 JPEG data URL。
+    /// 手机截屏原图约 12MP，直接 base64 会有 4MB+ 经 evaluateJavaScript 传给页面 ——
+    /// 又慢又有静默失败的风险，而离线 OCR 本来也只按 1600 处理。
+    private func downscaleJPEG(_ img: UIImage, maxEdge: CGFloat = 1600, quality: CGFloat = 0.8) -> String? {
+        let w = img.size.width, h = img.size.height
+        guard w > 0, h > 0 else { return nil }
+        let longest = max(w, h)
+        let scale = longest > maxEdge ? maxEdge / longest : 1
+        let nw = max(1, (w * scale).rounded())
+        let nh = max(1, (h * scale).rounded())
+        let fmt = UIGraphicsImageRendererFormat.default()
+        fmt.scale = 1
+        let out = UIGraphicsImageRenderer(size: CGSize(width: nw, height: nh), format: fmt).image { _ in
+            img.draw(in: CGRect(x: 0, y: 0, width: nw, height: nh))
+        }
+        guard let jpeg = out.jpegData(compressionQuality: quality) else { return nil }
+        return "data:image/jpeg;base64," + jpeg.base64EncodedString()
     }
 
     /// 写系统剪贴板文本

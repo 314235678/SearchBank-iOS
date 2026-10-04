@@ -365,6 +365,150 @@ const PAGE_TESTS = `
   chk("拿不到内容时给出明确提示（不再静默无反应）",
     tEl && /拿不到文件内容|恢复失败|导入失败/.test(tEl.textContent), tEl && tEl.textContent);
 
+  // ---------- 12. 图片来源（相册/相机）+ 快捷指令深链 ----------
+  // 用户报的问题①：点「图片识别搜题」的取图框，弹出的是「文件」App，
+  //   里面找不到刚截的图，等于没法选图。
+  //   根因：网页的取图入口是 <input type="file" id="imgInput">（点击 → 文件面板），
+  //   而旧手机版是靠自有 FAB 走相册；新版从电脑版重建后这条口子漏接了。
+  chk("已注入拍照按钮 #sbOcrCam", !!document.getElementById("sbOcrCam"));
+
+  let imgCalls = 0, lastImgFile = null;
+  const origHandleImage = window.handleImage;
+  window.handleImage = function (f) { imgCalls++; lastImgFile = f; };
+
+  const dropEl = document.getElementById("imgDrop");
+  const logN = window.__STUB_LOG.length;
+  dropEl.click();
+  await new Promise(function (r) { setTimeout(r, 350); });
+  const srcTypes = window.__STUB_LOG.slice(logN).map(function (x) { return x.type; });
+  chk("点取图框发出 pickImage（走系统相册）", srcTypes.indexOf("pickImage") >= 0, srcTypes.join(","));
+  chk("点取图框没有再走文件选择器 pickFiles", srcTypes.indexOf("pickFiles") < 0, srcTypes.join(","));
+  chk("相册返回的图交给了 handleImage", imgCalls === 1, "handleImage 调用 " + imgCalls + " 次");
+  chk("交给 handleImage 的确是图片文件",
+    !!lastImgFile && String(lastImgFile.type).indexOf("image/") === 0,
+    lastImgFile && lastImgFile.type);
+  chk("隐藏的 file input 已堵住（不再弹「文件」App）",
+    String(document.getElementById("imgInput").click).indexOf("native code") < 0,
+    String(document.getElementById("imgInput").click).slice(0, 40));
+
+  const camN = window.__STUB_LOG.length;
+  document.getElementById("sbOcrCam").click();
+  await new Promise(function (r) { setTimeout(r, 350); });
+  const camTypes = window.__STUB_LOG.slice(camN).map(function (x) { return x.type; });
+  chk("拍照按钮发出 captureImage（相机）", camTypes.indexOf("captureImage") >= 0, camTypes.join(","));
+
+  window.handleImage = origHandleImage;
+
+  // 用户报的问题②：快捷指令只到「打开软件」那一步，不搜题。
+  // 根因：快捷指令用的是 searchbank://fab-clipboard，
+  //   而 v3.0 首版只认 fab-clip / clip，漏了这个别名 → 落到兜底
+  //   swapToSearch("") → 只切页、搜索框是空的。
+  window.__STUB.clipboard = "工作面漏顶事故应当采取的措施";
+  let searchCalls = 0;
+  const origDoSearch = window.doSearch;
+  window.doSearch = function () { searchCalls++; return origDoSearch.apply(this, arguments); };
+
+  window.__SB.handleDeepLink("searchbank://fab-clipboard");
+  await new Promise(function (r) { setTimeout(r, 500); });
+  const si = document.getElementById("searchInput");
+  chk("fab-clipboard 把剪贴板内容填进搜索框",
+    !!si && si.value.indexOf("漏顶事故") >= 0, si && si.value);
+  chk("fab-clipboard 真的触发了搜索（不是只打开软件）",
+    searchCalls >= 1, "doSearch 调用 " + searchCalls + " 次");
+  const vs2 = document.getElementById("v-search");
+  chk("fab-clipboard 已切到搜索页", !!(vs2 && vs2.classList.contains("on")));
+
+  // 别名兼容：旧版还支持 fab-clip / clip；另外 launch 只开首页不搜题
+  // （换一段不同的文字：同一段文字在 3 秒内会被判为「已搜过」而跳过，
+  //   那是刻意的去重行为，见第 13 节）
+  searchCalls = 0;
+  window.__STUB.clipboard = "别名测试用的另一段题干文字内容";
+  window.__SB.handleDeepLink("searchbank://fab-clip");
+  await new Promise(function (r) { setTimeout(r, 400); });
+  chk("fab-clip 别名同样能搜题", searchCalls >= 1, "doSearch 调用 " + searchCalls + " 次");
+
+  searchCalls = 0;
+  window.__SB.handleDeepLink("searchbank://launch");
+  await new Promise(function (r) { setTimeout(r, 300); });
+  chk("launch 只打开首页、不乱搜题", searchCalls === 0, "doSearch 调用 " + searchCalls + " 次");
+  window.doSearch = origDoSearch;
+
+  // ---------- 13. 剪贴板监听 ↔ 快捷指令 的互相去重 ----------
+  // 两条路都会读到同一段文字（快捷指令是「拷贝→打开App」，监听每 1.2s 轮询），
+  // 不管就会搜两遍、并多弹一次「允许粘贴」。
+  // 但**不能只按文字去重**：监听走网页那套启发式过滤，可能把文字滤掉而没搜；
+  // 那时快捷指令若也跳过，就一次都不搜了 —— 正是用户报的「只打开软件不搜题」。
+  window.__STUB.clip = { changeCount: 100, kind: "text", text: "" };
+  document.getElementById("btnScreenOcr").click();
+  await new Promise(function (r) { setTimeout(r, 350); });
+  chk("点「开始剪贴板监听」不再卡在 launchGui（iOS 无需 Umi-OCR）",
+    document.getElementById("btnClipboardStop").style.display !== "none",
+    "停止按钮 display=" + document.getElementById("btnClipboardStop").style.display);
+  chk("按钮文案已本地化、不再提 Umi-OCR",
+    document.getElementById("btnScreenOcr").textContent.indexOf("Umi-OCR") < 0,
+    document.getElementById("btnScreenOcr").textContent);
+
+  searchCalls = 0;
+  window.doSearch = function () { searchCalls++; return origDoSearch.apply(this, arguments); };
+
+  // 13a. 监听捕获到新文本 → 交给网页回调 → 自动搜题
+  const WATCH_TEXT = "为预防工作面两端发生漏顶事故应当采取的措施是加强支护";
+  window.__STUB.clip = { changeCount: 101, kind: "text", text: WATCH_TEXT };
+  await new Promise(function (r) { setTimeout(r, 1700); });
+  chk("监听捕获剪贴板新文本并自动搜题", searchCalls >= 1, "doSearch " + searchCalls + " 次");
+
+  // 13b. 监听刚搜过的同一段文字 → 快捷指令不该再搜一遍
+  searchCalls = 0;
+  window.__STUB.clipboard = WATCH_TEXT;
+  window.__SB.handleDeepLink("searchbank://fab-clipboard");
+  await new Promise(function (r) { setTimeout(r, 500); });
+  chk("监听刚搜过的同一段文字，快捷指令不重复搜", searchCalls === 0, "doSearch " + searchCalls + " 次");
+
+  // 13c. 关键安全性质：监听被启发式过滤掉（太短、无中文）时，
+  //      快捷指令必须照搜 —— 否则一次都不搜
+  searchCalls = 0;
+  window.__STUB.clip = { changeCount: 102, kind: "text", text: "hi" };
+  await new Promise(function (r) { setTimeout(r, 1700); });
+  chk("监听把「hi」过滤掉（没搜）", searchCalls === 0, "doSearch " + searchCalls + " 次");
+  window.__STUB.clipboard = "hi";
+  window.__SB.handleDeepLink("searchbank://fab-clipboard");
+  await new Promise(function (r) { setTimeout(r, 600); });
+  chk("监听被过滤时快捷指令仍会搜（不会一次都不搜）", searchCalls >= 1, "doSearch " + searchCalls + " 次");
+
+  // 13d. 剪贴板里是图片 → 离线识别 + 净化 → 直接搜题
+  searchCalls = 0;
+  window.__STUB.clip = { changeCount: 103, kind: "image", dataUrl: window.__STUB.imageResult };
+  await new Promise(function (r) { setTimeout(r, 1700); });
+  chk("剪贴板图片会走识别链路（发出 ocrBlocks）",
+    window.__STUB_LOG.filter(function (x) { return x.type === "ocrBlocks"; }).length > 0);
+
+  // 收尾：停止监听，避免影响后面的用例
+  document.getElementById("btnClipboardStop").click();
+  await new Promise(function (r) { setTimeout(r, 200); });
+  chk("停止监听按钮恢复状态",
+    document.getElementById("btnScreenOcr").style.display !== "none");
+  window.doSearch = origDoSearch;
+
+  // ---------- 14. 内置题库装载 ----------
+  // v3.0 首版这条链路**从来没成功过**：
+  //   ① 用 window.DATA（网页是 let DATA，不在 window 上）→ 恒为 undefined
+  //   ② fetch("搜题题库.json")（WKWebView 的 file:// 下被 WebKit 拦掉）
+  // 现改为原生 getBundledBank + 裸标识符访问 DATA。
+  localStorage.removeItem("sb_seeded");
+  window.__STUB.bundledBank = JSON.stringify({
+    items: [{ id: "seed1", q: "内置题库测试题一", a: "A", opts: [], type: "单选题",
+              bankId: "bk-seed", cat: "", note: "", src: "内置" }],
+    banks: [{ id: "bk-seed", name: "内置题库", color: "#2563eb" }]
+  });
+  await window.__SB.__test.seedFromBundle();
+  chk("内置题库已装进 DATA", DATA.items.length === 1, DATA.items.length);
+  chk("内置题库题目内容正确",
+    DATA.items[0] && DATA.items[0].q === "内置题库测试题一",
+    DATA.items[0] && DATA.items[0].q);
+  chk("内置题库的题库定义一并合并",
+    (DATA.banks || []).some(function (b) { return b.id === "bk-seed"; }));
+  chk("数据就绪闸门已打开", window.__SB.__test.isDataReady() === true);
+
   return { rows: R, errors: window.__PAGE_ERRORS || [] };
 })();
 `;
