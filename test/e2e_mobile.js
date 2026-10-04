@@ -602,6 +602,75 @@ const PAGE_TESTS = `
     chk("第 16 节（输入清洗 + 选项识别）执行成功", false, (e && e.message) || String(e));
   }
 
+  // ---------- 17. 整题检索（v1.0.63）：题干是套话时，按选项整条比对 ----------
+  // 用户实测：AI 精读把题干和 4 个选项都识别对了，但搜出来的全是
+  // "只是同提到刮板输送机"的题，正确那道排第 33 —— 因为题干是
+  // 「下列叙述中错误的是（）」这种全库重复上千次的套话，而旧算法给
+  // 选项的权重只有 0.5（＝1 分/块），压不过题干相似度的 20~40 分/块。
+  try {
+    const GEN_STEM = "下列叙述中错误的是（）。";
+    const T_OPTS = [
+      "刮板输送机司机必须与各工种相互协调好，及时开停机，做到安全生产",
+      "当班出现问题，当班应当妥善处理，如果不影响生产可以留给下一班",
+      "刮板输送机司机应经常检查电动机、减速器等各部分的运转声音是否正常，轴承是否过热",
+      "行人通过的输送机机尾要设盖板，输送机行人跨越处要有过桥"
+    ];
+    const baseCat = DATA.items[0] ? DATA.items[0].cat : "";
+    const baseBank = DATA.items[0] ? DATA.items[0].bankId : "default";
+    const probeT = {
+      id: "probe_whole_" + Date.now(), q: GEN_STEM, a: "B",
+      opts: T_OPTS.map(function (t, i) { return { label: "ABCD"[i], text: t }; }),
+      type: "单选题", cat: baseCat, bankId: baseBank, note: "", src: "测试", createdAt: Date.now()
+    };
+    // 干扰题：题干讲的是完全另一件事，只是也提到"刮板输送机"
+    const probeD = {
+      id: "probe_decoy_" + Date.now(), q: "827.刮板输送机运行中造成伤人的原因有（ ）。", a: "A",
+      opts: [{ label: "A", text: "人被转动部分绞伤" },
+             { label: "B", text: "用刮板输送机运送物料时被挤伤或撞伤" },
+             { label: "C", text: "其他人误开机而造成的人身伤亡" }],
+      type: "单选题", cat: baseCat, bankId: baseBank, note: "", src: "测试", createdAt: Date.now()
+    };
+    // 干扰题放在数组更前面：旧算法下它靠"题干词级相似"必然压过正确题
+    DATA.items.unshift(probeT);
+    DATA.items.unshift(probeD);
+
+    // 模拟 AI 精读的输出：题干 + 带标号的 4 个选项
+    const askText = GEN_STEM + "\\n"
+      + T_OPTS.map(function (t, i) { return "ABCD"[i] + ". " + t; }).join("\\n");
+    // 桥接/源码的整题识别必须认出来
+    chk("整题识别：拆出 4 条选项、题干不含选项文字",
+      (function () {
+        if (typeof planQuestion !== "function") return false;
+        const pq = planQuestion(askText);
+        return pq.optTexts.length === 4 && pq.stemText.indexOf("刮板输送机") < 0;
+      })());
+    chk("整题识别：选项正文不含 A/B/C/D 标号",
+      (function () {
+        const pq = planQuestion(askText);
+        return pq.optTexts.every(function (t) { return !/^[A-Ha-h]/.test(t); });
+      })());
+
+    go("search"); setSearchText(askText); doSearch();
+    await new Promise(function (r) { setTimeout(r, 1600); });
+    const cs = Array.prototype.slice.call(document.querySelectorAll("#searchResults .qcard"));
+    chk("整题检索：有结果", cs.length > 0, cs.length);
+    const firstTxt = cs[0] ? cs[0].textContent.replace(/\\s+/g, " ") : "";
+    chk("整题检索：第 1 名是题干为套话的那道题（不是只同提到某个词的干扰题）",
+      firstTxt.indexOf(GEN_STEM.replace("（）。", "")) >= 0, firstTxt.slice(0, 46));
+    const dIdx = cs.findIndex(function (c) {
+      return c.textContent.indexOf("刮板输送机运行中造成伤人的原因") >= 0;
+    });
+    chk("干扰题仍在结果里、但排在正确题之后", dIdx > 0, "第 " + (dIdx + 1) + " 名");
+
+    [probeD, probeT].forEach(function (x) {
+      const k = DATA.items.indexOf(x); if (k >= 0) DATA.items.splice(k, 1);
+    });
+    setSearchText(""); doSearch();
+    await new Promise(function (r) { setTimeout(r, 400); });
+  } catch (e) {
+    chk("第 17 节（整题检索）执行成功", false, (e && e.message) || String(e));
+  }
+
   } catch (fatal) {
     // 这里同样要写双反斜杠（见上面 RAW_OCR 的说明）
     chk("页面测试脚本未中途抛错", false,

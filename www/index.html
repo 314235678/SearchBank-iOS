@@ -772,7 +772,7 @@
 <div class="mask" id="setMask">
   <div class="modal">
     <h3>设置</h3>
-    <div class="muted" style="margin:-4px 0 10px;font-size:13px;">当前版本 <b>v1.0.62</b> <span style="display:inline-block;padding:1px 8px;border-radius:8px;background:#eaf1ff;color:#1d4ed8;font-size:12px;font-weight:600;margin-left:2px;">手机版 · iOS m4</span>（新增：<b>粘贴/识别的题干更干净，搜得准</b> —— 自动忽略考试界面自带的题库名、进度（… 3/20）与分值（1.0分）这些碎片，它们以前会被压成 "320"、"10分" 混进检索把正确题挤下去；同时修掉「A 强度试验」这种丢掉分隔符的选项认不出来、反而污染题干的老问题）</div>
+    <div class="muted" style="margin:-4px 0 10px;font-size:13px;">当前版本 <b>v1.0.63</b> <span style="display:inline-block;padding:1px 8px;border-radius:8px;background:#eaf1ff;color:#1d4ed8;font-size:12px;font-weight:600;margin-left:2px;">手机版 · iOS m5</span>（修复：<b>题干是套话时按选项整题比对</b> —— 「下列叙述中错误的是（）」这类题干全库重复上千次、本身没有区分度，以前只给选项 0.5 的权重（＝1 分/块），于是"只是同提到某个词"的题靠题干相似度拿 20~40 分/块被顶到前面；现在四个选项逐字全中即认定为同一道题，直接排最前）</div>
     <div class="card" style="border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:14px;">
       <div style="font-weight:600;margin-bottom:6px;">本地文件夹保存（防浏览器清理）</div>
       <div id="folderStatus" class="muted" style="margin-bottom:8px;font-weight:400;"></div>
@@ -1526,6 +1526,62 @@ function qLineKind(line){
   }
   return "stem";
 }
+/* v1.0.63：剥掉一行开头的选项标号，返回选项正文；不是选项行则返回 null。
+   覆盖：A. / A、 / (A) / A） / A： / A＋空格 / ①． 七种写法。
+   比 qLineKind 多一条：**长选项**（"A 后面直接跟文字"，超过 30 字、无分隔符）也算 ——
+   qLineKind 对"字母+空格"有 30 字上限（那是为了不误吞真题干），
+   但 30 字的选项在煤矿类题目里很常见，这里必须认出来。
+   防误吞：以句末标点收尾的长句（"A 类火灾是指固体物质火灾。"）判为题干。 */
+function optBody(line){
+  const s=String(line==null?"":line).trim();
+  if(!s)return null;
+  /* ① 带明确分隔符：A. / A、 / (A) / A） / A： —— 认定度最高。
+     这类写法后面就算是一句完整的话（以"。"收尾）也仍然是选项 ——
+     实测真题里就有「D 在完成密闭工作后，迅速撤至安全地点。」。
+     所以"句末标点"这条防误吞规则**不能**用在这里：
+     一旦误判成题干，标号剥不掉，"d…"就永远匹配不上缓存里的选项文字。 */
+  let m=/^[（(\[]?\s*[A-Ha-h]\s*[）)\]．.、,，:：][ \t\u3000]*(\S.*)$/.exec(s);
+  if(m)return m[1].trim();
+  /* ② 只有空格：A 文本 —— 含糊写法，可能是以字母开头的真题干
+     （"A 类火灾是指固体物质火灾。"），这里保守：以句末标点收尾的长句判为题干 */
+  m=/^[A-Ha-h][ \t\u3000]+(\S.*)$/.exec(s);
+  if(m){
+    const rest=m[1].trim();
+    if(rest.length>=12&&/[。？?！!；;]$/.test(rest))return null;
+    return rest;
+  }
+  /* ③ 圈号：①．文本 */
+  m=/^[①②③④⑤⑥]\s*[.、．)）:：]?[ \t\u3000]*(\S.*)$/.exec(s);
+  if(m)return m[1].trim();
+  return null;
+}
+/* v1.0.63：把"单道题"的输入拆成 题干段 / 选项段（区别于 qSegments 的"多题切分"）。
+   用途：题干是"下列叙述中错误的是（）"这类没有区分度的套话时，
+   真正的识别特征全在选项里 —— 需要把选项单独拿出来逐条比对。
+   注意必须剥掉选项标号：norm 会把"A."留下一个 "a"，而缓存里的选项文字不含标号，
+   不剥就对不上（这正是旧代码整段比对只有 0.97 而不是 1 的原因）。
+   只做识别，不改文本；判不准就 hasOpts=false，退回老算法。 */
+function planQuestion(text){
+  const lines=String(text==null?"":text).replace(/\r\n?/g,"\n").split("\n");
+  const stem=[],optTexts=[];
+  for(const rawLine of lines){
+    const line=String(rawLine).trim();
+    if(!line)continue;
+    const kind=qLineKind(line);
+    if(kind==="ans"||kind==="meta"||kind==="skip")continue;
+    let t=optBody(line);
+    if(t==null&&kind==="opt"){
+      /* qLineKind 认了但我这条规则没认 → 兜底也要把标号剥掉。
+         别把 "A." 带进选项正文，否则永远匹配不上缓存里的选项文字。 */
+      t=line.replace(/^[（(\[]?\s*[A-Ha-h]\s*[）)\]．.、,，:：][ \t\u3000]*/,"")
+             .replace(/^[A-Ha-h][ \t\u3000]+/,"")
+             .replace(/^[①②③④⑤⑥]\s*[.、．)）:：]?[ \t\u3000]*/,"").trim();
+      if(!t)t=null;
+    }
+    if(t!=null)optTexts.push(t);else stem.push(line);
+  }
+  return {hasOpts:optTexts.length>0,stemText:stem.join(""),optTexts:optTexts};
+}
 /* 把粘贴的整段文字切成"疑似题组"。只做高精度切分 —— 判不准就不切，
    宁可不切（退回老路径）也不误切。每组 = {stem:[行],opts:[行],ans:[行]} */
 function qSegments(text){
@@ -1576,12 +1632,50 @@ function qPlan(raw){
   if(ok.length<2)return {use:false,segs,noise};
   return {use:true,segs:ok,noise};
 }
-/* 把"整段 query 的评分链路"抽成工厂，老路径与分段路径共用（评分逻辑一字未改） */
+/* 把"整段 query 的评分链路"抽成工厂，老路径与分段路径共用（评分逻辑一字未改）。
+   ⚠ 第二个参数必须传**原文**（含换行与选项标号），不要传 norm() 之后的字符串 ——
+   v1.0.63 起这里靠"行结构"区分题干与选项，传归一化结果会让整题识别静默失效。 */
 function makeQueryScorer(cache,rawText){
   const q=norm(rawText);
   if(!q)return ()=>0;
   const blocks=chunkQuery(q);
   const primaryQ=blocks[0]||q;
+  /* v1.0.63：整题输入（题干 + 选项）单独一条评分链路。
+     场景（用户实测）：题干是「下列叙述中错误的是（）」这类没有区分度的套话，
+     真正的识别特征全在选项里。旧算法给选项的权重只有 0.5（＝1 分/块），
+     而只是"共享某个词"的题靠题干相似度能拿 20~40 分/块 —— 排序整个反过来。
+     实测那道「刮板输送机…」的题：它四个选项逐字全中，只累到 85.2 分，
+     被 6 个命中块（155.1 分）的无关题挤到第 33 名。
+     现在改成：整条选项逐字命中才是"同一道题"的硬证据，按命中条数排。
+     分值取 200+30*hit（≥230）：逐块累加的数学上限是 120+65=185（见 scoreItem
+     单块最高 20+1+4+40），所以这个区间一定能压过"词级相似"。 */
+  if(blocks.length>1){
+    const pq=planQuestion(rawText);
+    const optNs=pq.optTexts.map(norm).filter(s=>s.length>=10);
+    /* 要求输入确实有 ≥2 条选项行（防止把"A 类火灾是指…"这类真题干误当成选项），
+       且至少 1 条选项正文够长（≥10 字）才走整题链路。 */
+    if(pq.optTexts.length>=2&&optNs.length){
+      const stemN=norm(pq.stemText);
+      return (c)=>{
+        let hit=0;
+        for(let i=0;i<optNs.length;i++){if(c.OPT.includes(optNs[i]))hit++;}
+        const fullScore=scoreItem(c,q);
+        if(hit>0){
+          const all=hit===optNs.length&&optNs.length>=2;
+          const withStem=all&&stemN.length>=4&&c.Q.includes(stemN);
+          return Math.max((withStem?400:(200+30*hit))*100,fullScore*100);
+        }
+        /* 一条选项都没逐字命中（多半是 OCR 有错字）→ 退回老算法兜底 */
+        if(fullScore>=15)return fullScore*100;
+        let total=0;
+        for(let bi=0;bi<blocks.length;bi++){
+          const s=scoreItem(c,blocks[bi]);
+          if(s>0){total+=s;if(total>=120)break;}
+        }
+        return total;
+      };
+    }
+  }
   if(blocks.length<=1)return (c)=>scoreItem(c,primaryQ);
   return (c)=>{
     const fullScore=scoreItem(c,q);
@@ -1620,6 +1714,21 @@ function doSearch(){
     }
   }
   const q=norm(raw);
+  /* v1.0.63：识别到"一整道题（题干+选项）"时说清排序依据 ——
+     用户报过"搜出来的都跟选项有关、跟题干没关系"，就是因为题干是
+     「下列叙述中错误的是（）」这种套话，真正能区分题目的是选项文字。 */
+  if(!cleaned.dropped){
+    const _pq=planQuestion(raw);
+    const _optN=_pq.optTexts.map(norm).filter(s=>s.length>=10);
+    if(_pq.optTexts.length>=2&&_optN.length>=1){
+      const tip=$("#searchOcrTip");
+      if(tip){
+        tip.style.display="";tip.style.color="";
+        tip.innerHTML="已识别为 1 道完整题（题干 "+norm(_pq.stemText).length+" 字 + 选项 "+_optN.length
+          +" 条）→ 按「整题逐字比对」排序：四个选项都对上的排最前";
+      }
+    }
+  }
   const cf=$("#catFilter").value;
   const tf=$("#typeFilter")?$("#typeFilter").value:"";
   const bf=$("#bankFilter").value;
@@ -1662,7 +1771,12 @@ function doSearch(){
   }
   // v1.0.2 分块评分（对齐手机版 v2.18）：先完整 query 评分（整段命中=满分×100 排第 1），
   // 不够 15 分才退回分块容错（防 OCR 错 1-2 字）
-  const scoreBlocks=makeQueryScorer(cache,q);
+  /* ⚠ 必须传 raw（带换行与选项标号的原文），不能传 q。
+     q 是 norm() 之后的字符串：换行和标号都被去掉了，
+     v1.0.63 的整题识别（planQuestion，靠"行"判断题干/选项）就永远看不到选项，
+     会静默退回老算法 —— 表面不报错，但修复等于没生效。
+     （这个坑只有端到端跑一遍 doSearch 才会暴露，单测评分器是发现不了的。） */
+  const scoreBlocks=makeQueryScorer(cache,raw);
   // 异步分批评分，避免大题库卡死主线程；每批渲染进度
   const total=pool.length;
   if(total>800){
