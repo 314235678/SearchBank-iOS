@@ -236,6 +236,135 @@ const PAGE_TESTS = `
   chk("底部导航有 7 项", bot && bot.querySelectorAll("button").length === 7,
     bot && bot.querySelectorAll("button").length);
 
+  // ---------- 11. 导入电脑版备份（v3.0.1 修复的「静默失效」bug）----------
+  // 历史：首版桥接写成 isFn("ingestBackup") && window.ingestBackup(...)，
+  // 但网页里根本没有这个函数 → 判断恒假 → 不执行也不报错 → "导入没反应"。
+  chk("桥接已定义 window.ingestBackup", typeof window.ingestBackup === "function");
+
+  function maskOpen() {
+    const m = document.getElementById("mask");
+    return !!(m && m.classList.contains("on"));
+  }
+  function okBtn() {
+    const m = document.getElementById("mask");
+    if (!m) return null;
+    const b = m.querySelectorAll("button");
+    for (let i = 0; i < b.length; i++) {
+      if (b[i].textContent.trim() === "确定") return b[i];
+    }
+    return null;
+  }
+  /* 上一步的确认弹窗若没关，会被下一步的轮询点掉，造成串扰
+     （首版测试就栽在这：小备份的弹窗被大备份那步点了，导致断言全错位）。
+     所以每次导入前先清干净。 */
+  function ensureMaskClosed() {
+    if (!maskOpen()) return;
+    const m = document.getElementById("mask");
+    const b = m.querySelectorAll("button");
+    for (let i = 0; i < b.length; i++) {
+      if (b[i].textContent.trim() === "取消") { b[i].click(); return; }
+    }
+    if (typeof closeMask === "function") closeMask();
+  }
+  async function waitFor(fn, ms) {
+    const t0 = Date.now();
+    while (Date.now() - t0 < ms) {
+      try { if (fn()) return true; } catch (e) {}
+      await new Promise(function (r) { setTimeout(r, 40); });
+    }
+    return false;
+  }
+  // 确定性流程：确保无残留弹窗 → 点导入 → 等弹窗 → 点确定 → 等合并生效
+  async function importFlow(timeoutMs) {
+    ensureMaskClosed();
+    await new Promise(function (r) { setTimeout(r, 80); });
+    const before = DATA.items.length;
+    document.getElementById("btnImport").click();
+    if (!(await waitFor(maskOpen, timeoutMs || 6000))) {
+      return { ok: false, reason: "确认弹窗始终没出现", before: before, after: DATA.items.length };
+    }
+    const b = okBtn();
+    if (!b) return { ok: false, reason: "找不到确定按钮", before: before, after: DATA.items.length };
+    b.click();
+    const merged = await waitFor(function () { return DATA.items.length > before; }, 4000);
+    return { ok: merged, reason: merged ? "" : "点了确定但没合并",
+             before: before, after: DATA.items.length };
+  }
+  function b64utf8(s) { return btoa(unescape(encodeURIComponent(s))); }
+
+  // 11a. 小文件 → 仍走 base64 路径
+  const smallBackup = JSON.stringify({
+    items: [{ id: "", type: "单选题", stem: "导入测试-小文件", opts: ["甲", "乙"], ans: "A" }],
+    banks: [{ id: "bk-import-small", name: "导入题库-小" }]
+  });
+  window.__STUB.pickFilesResult = [{
+    name: "小备份.json", mime: "application/json",
+    data: b64utf8(smallBackup), size: smallBackup.length
+  }];
+  const f1 = await importFlow(5000);
+  chk("小备份(base64)导入成功", f1.ok, f1.reason || (f1.before + " → " + f1.after));
+  chk("小备份题干未损坏",
+    DATA.items[DATA.items.length - 1] && DATA.items[DATA.items.length - 1].stem === "导入测试-小文件",
+    DATA.items[DATA.items.length - 1] && DATA.items[DATA.items.length - 1].stem);
+  chk("备份里的题库定义已合并",
+    (DATA.banks || []).some(function (b) { return b.id === "bk-import-small"; }));
+
+  // 11b. 大文件 → 原生暂存 + 分块读取（真机 8MB 备份走这条）
+  const filler = "为预防工作面两端发生漏顶事故，应当采取的措施是加强支护与监测。";
+  let pad = "";
+  while (pad.length < 4000) pad += filler;
+  const bigItems = [];
+  for (let i = 0; i < 300; i++) {
+    bigItems.push({ id: "", type: "单选题", stem: pad.slice(0, 3800) + "大文件-" + i,
+                    opts: ["甲", "乙", "丙", "丁"], ans: "A" });
+  }
+  const bigBackup = JSON.stringify({
+    items: bigItems, banks: [{ id: "bk-import-big", name: "导入题库-大" }]
+  });
+  const buf = window.__STUB.utf8Bytes(bigBackup);
+  window.__STUB.stagedBytes = buf;
+  window.__STUB.pickFilesResult = [{
+    name: "大备份.json", mime: "application/json", staged: true, size: buf.length
+  }];
+  chk("大备份样本 > 3MB（触发分块路径）", buf.length > 3 * 1024 * 1024,
+    (buf.length / 1048576).toFixed(2) + " MB");
+
+  // 关键：断言样本真的让分块边界落在一个汉字的中间字节上。
+  // 若桥接逐块 decode 而不是在字节层拼接，这里必然出错 —— 测试才有意义。
+  const CH = 262144;
+  let splitMidChar = false;
+  for (let off = CH; off < buf.length; off += CH) {
+    if ((buf[off] & 0xC0) === 0x80) { splitMidChar = true; break; }
+  }
+  chk("样本确实让分块边界切在汉字中间（否则测不到风险点）", splitMidChar);
+
+  const chunkBefore = window.__STUB_LOG.filter(function (x) { return x.type === "readImportChunk"; }).length;
+  const f2 = await importFlow(9000);
+  const chunkCalls = window.__STUB_LOG.filter(function (x) { return x.type === "readImportChunk"; }).length - chunkBefore;
+
+  chk("大备份(分块)导入成功", f2.ok, f2.reason || (f2.before + " → " + f2.after));
+  chk("分块读取确实调用了多次", chunkCalls > 1, chunkCalls + " 次");
+  const firstBig = DATA.items[f2.before];
+  chk("大备份首条题干逐字一致（证明分块拼接未损坏 UTF-8）",
+    !!firstBig && firstBig.stem === bigItems[0].stem,
+    firstBig ? ("长度 " + firstBig.stem.length + " vs 期望 " + bigItems[0].stem.length) : "缺失");
+  const lastBig = DATA.items[DATA.items.length - 1];
+  chk("大备份末条题干逐字一致",
+    !!lastBig && lastBig.stem === bigItems[bigItems.length - 1].stem);
+  chk("大备份里的题库定义已合并",
+    (DATA.banks || []).some(function (b) { return b.id === "bk-import-big"; }));
+
+  // 11c. 拿不到备份内容时必须给出提示，而不是静默
+  ensureMaskClosed();
+  await new Promise(function (r) { setTimeout(r, 80); });
+  const tEl = document.getElementById("toast");
+  if (tEl) tEl.textContent = "";
+  window.__STUB.pickFilesResult = [{ name: "空文件.json", mime: "application/json" }];
+  document.getElementById("btnImport").click();
+  await new Promise(function (r) { setTimeout(r, 400); });
+  chk("拿不到内容时给出明确提示（不再静默无反应）",
+    tEl && /拿不到文件内容|恢复失败|导入失败/.test(tEl.textContent), tEl && tEl.textContent);
+
   return { rows: R, errors: window.__PAGE_ERRORS || [] };
 })();
 `;

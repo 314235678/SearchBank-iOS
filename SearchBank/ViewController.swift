@@ -25,6 +25,10 @@ class ViewController: UIViewController,
     // 收到 URL scheme 唤醒（NotificationCenter 由 AppDelegate.post 触发）
     private var pendingOpenURL: String?
 
+    /// 超过这个大小的 JSON 备份改走「沙盒暂存 + 分块读取」，
+    /// 避免把 ~10MB 的 base64 一次性塞进 evaluateJavaScript（慢且可能静默失败）。
+    static let importStageThreshold = 3 * 1024 * 1024
+
     // MARK: - WebView 配置与加载
 
     private func setupWebView() {
@@ -175,6 +179,9 @@ class ViewController: UIViewController,
             handleOCRBlocks(id: id, payload: payload)
         case "pickFiles":
             handlePickFiles(id: id)
+        // v3.0.1：分块读取「待导入备份」（大 JSON 不走 base64 的那条路）
+        case "readImportChunk":
+            handleReadImportChunk(id: id, payload: payload)
         case "shareExport":
             handleShareExport(id: id, payload: payload)
         // v3.0：二进制导出（试卷 docx）走系统分享
@@ -414,6 +421,26 @@ class ViewController: UIViewController,
 
     // documentPicker 回调实现统一在 WKNavigationDelegate/WKUIDelegate 扩展里
     // （同时处理 native bridge 和 `<input type="file">` 两条路径）
+
+    // MARK: - 分块读取待导入备份（v3.0.1）
+
+    /// JS 按 256KB 逐块请求，这里每次最多返回 4MB。
+    /// 返回的 base64 是**原始字节**的片段，JS 需在字节层拼接后再统一解 UTF-8
+    /// （分块边界可能切断一个汉字，逐块 decode 会得到乱码）。
+    private func handleReadImportChunk(id: String, payload: [String: Any]) {
+        let offset = payload["offset"] as? Int ?? 0
+        let length = payload["length"] as? Int ?? (256 * 1024)
+        guard let r = LocalStore.readImportChunk(offset: offset, length: length) else {
+            respond(id: id, result: ["error": "没有待导入的备份文件（请重新选择文件）"])
+            return
+        }
+        respond(id: id, result: [
+            "data": r.b64,
+            "next": r.next,
+            "eof": r.eof,
+            "size": r.size
+        ])
+    }
 
     // MARK: - 导出分享（把 JSON 写入临时文件后用系统分享面板）
 
@@ -684,10 +711,30 @@ extension ViewController: WKNavigationDelegate, WKUIDelegate {
             defer { if secured { url.stopAccessingSecurityScopedResource() } }
             do {
                 let data = try Data(contentsOf: url)
-                let b64 = data.base64EncodedString()
                 let mime = (try? url.resourceValues(forKeys: [.contentTypeKey]).contentType?.identifier)
                     ?? "application/octet-stream"
-                files.append(["name": url.lastPathComponent, "mime": mime, "data": b64])
+                // v3.0.1：大 JSON 备份不走 base64。
+                // 电脑版导出的备份已有 8MB，base64 后约 10.7MB，一次性经
+                // evaluateJavaScript 传给 JS 又慢又可能静默失败；
+                // 改成写进沙盒，JS 用 readImportChunk 按 256KB 分块取。
+                if url.pathExtension.lowercased() == "json",
+                   data.count > Self.importStageThreshold,
+                   LocalStore.stageImport(data) != nil {
+                    files.append([
+                        "name": url.lastPathComponent,
+                        "mime": mime,
+                        "staged": true,
+                        "size": data.count
+                    ])
+                    continue
+                }
+                // 小文件（以及落盘失败时）仍走 base64，改动最小
+                files.append([
+                    "name": url.lastPathComponent,
+                    "mime": mime,
+                    "data": data.base64EncodedString(),
+                    "size": data.count
+                ])
             } catch {}
         }
         let resolve = documentPickerResolve

@@ -1,0 +1,61 @@
+v3.0.1 (手机版 iOS m2): 修复「导入电脑版备份没反应」+ 大文件分块读取
+
+【用户报的问题】
+从电脑导出的题库，导入手机版完全没有反应（不报错、不合并）。
+用户实测文件：8MB，11344 条题目 + 5 个题库。
+
+【根因：v3.0 首版移植时我把函数删了却保留了调用】
+网页真实的导入逻辑只挂在
+  $("#btnImport").click() → $("#restoreInput").click()
+  → #restoreInput 的 change 事件（JSON.parse → 校验 → confirm2 → 合并）
+**网页里根本没有 ingestBackup 这个函数。**
+
+而 v2.22 的旧桥接是**自己定义**了 window.ingestBackup（含完整合并逻辑）的，
+我在重写 v3.0 时把定义删掉了，却保留了这一行：
+
+  if (isFn("ingestBackup")) window.ingestBackup(...)   // ← 恒为假
+
+于是判断永远不成立：既不执行、也不报错 —— 用户看到的就是「选了文件没反应」。
+更糟的是我同时还加了 `restore.click = function(){}`，把网页自带的
+<input type=file> 兜底路径也堵死了，两条路全断。
+
+【关于作用域的一点澄清（决定怎么修）】
+`let DATA = load()` 是顶层 let，不会挂到 window 上，但顶层 let 进的是
+「全局词法环境」，跨 <script> 按标识符访问是允许的 —— v2.22 就是这么访问
+DATA / uid / save 的。所以合并逻辑只能由桥接自己实现（不能指望 window.DATA），
+但要放在函数体内、点击时才执行（那时网页主体脚本早已跑完）。
+
+【修法】
+1. 恢复 window.ingestBackup 定义：合并 items + banks，并补齐网页同样的副作用
+   （save / fillCatFilter / fillBankSelects / renderManageIfOpen /
+   renderPPTypeRows / renderHome）——少一个都会让用户以为"还是没反应"。
+   全程 try/catch，失败必有 toast，**不再有静默路径**。
+2. 不再堵 restoreInput.click，保留网页原生兜底路径。
+3. OpenPanelShim.m 的文件类型原先只放行 image + docx，
+   导致 <input accept=".json"> 里根本选不到 json —— 兜底路径等于死的。
+   放宽为 docx/xlsx/json/csv/图片/任意文件。
+
+【大文件：不再走一次性 base64】
+8MB 的备份 base64 后约 10.7MB，一次性塞进 evaluateJavaScript 的字符串参数
+既慢又可能**静默失败**（正是本次要消灭的失败模式）。改为：
+  · Swift 侧：>3MB 的 JSON 写进沙盒 Documents/SearchBank/import-staged.json，
+    只回传 {staged:true, size}；小文件仍走原 base64 路径（改动最小）
+  · 新增原生消息 readImportChunk：JS 按 256KB 分块取，每次返回原始字节的 base64
+  · JS 侧**在字节层拼齐后再整体解 UTF-8** —— 分块边界可能正好切在一个汉字中间，
+    逐块 decode 会把汉字拼成乱码（这点在回归里有专门的断言守着）
+
+【验证】
+· 移动端 E2E：89/89 全绿（原 77 项 + 12 项导入新用例）
+  - 小备份(base64) 6290 → 6291；大备份(分块) 6291 → 6591（14 次分块）
+  - 断言样本**确实让分块边界落在汉字中间字节上**，再验题干逐字一致
+  - 「拿不到内容时给出明确提示」——杜绝再次静默
+  - 顺带修了测试自身的串扰：上一步的确认弹窗未关被子一步点掉，
+    改为「先清残留弹窗 → 等弹窗出现 → 点确定 → 等合并生效」的确定性流程
+· 真实数据验证（新增 test/verify_real_backup.js，直接喂用户的 8MB 备份）：
+  分块 31 次、净增 11344 条与文件内数量一致、首/中/末条题干逐字一致、
+  悬空归属题目 0、页面零错误 → REAL_BACKUP_OK
+· 另记：题干字段是 q（不是 stem）、答案是 a、选项是 opts、归属是 bankId
+
+【版本标记】
+build_www.js 增加手机版构建号：v1.0.61 手机版 · iOS m2
+（手机版与电脑版共用 vX.Y.Z，mN 用于核对"装的是不是刚出的包"）

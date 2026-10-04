@@ -133,6 +133,16 @@
     });
   };
 
+  /* v3.0.1 新增：分块读取「原生暂存的待导入备份」。
+     为什么需要它：用户从电脑导出的备份有 8MB，base64 后约 10.7MB，
+     一次性塞进 evaluateJavaScript 的字符串参数既慢、又可能失败，
+     而失败是静默的 —— 用户只会看到"导入没反应"。所以大文件改由
+     原生写进沙盒，JS 按 256KB 分块拉，每块都小得绝对安全。
+     返回 { data, next, eof, size }。 */
+  window.__SB.readImportChunk = function (offset, length) {
+    return post("readImportChunk", { offset: offset, length: length });
+  };
+
   window.__SB.shareExport = function (text, filename) {
     return post("shareExport", { text: text, filename: filename }).then(function (r) {
       if (r && r.error) throw new Error(r.error);
@@ -1116,11 +1126,127 @@
     };
   }
 
-  /* 8.3 导入恢复 → 原生文件选择器（并废掉网页自带的 <input type=file> 链路） */
+  /* 8.3 导入恢复 → 原生文件选择器
+
+     ⚠️ 这一节 v3.0 首版出过一个「静默失效」的 bug，改动前请先读这段：
+       网页真实的导入逻辑只挂在 `$("#btnImport")` → `$("#restoreInput").click()`
+       → `#restoreInput` 的 change 事件上（JSON.parse → 校验 → confirm2 → 合并）。
+       **网页里没有 ingestBackup 这个函数。**
+       首版桥接写成了 `if (isFn("ingestBackup")) window.ingestBackup(...)`，
+       判断永远为假 → 既不执行也不报错 → 用户看到的就是「选了文件没反应」。
+       而且当时还加了 `restore.click = function(){}`，把网页自带的兜底路径也堵死，
+       两条路全断。
+
+     关于作用域：`let DATA = load()` 是**顶层 let**，不会挂到 window 上，
+     但顶层 let 进的是「全局词法环境」，跨 <script> 按标识符访问是允许的
+     （v2.22 就是这么访问 DATA / uid / save 的，且生效）。
+     因此合并逻辑必须在桥接里自己实现，不能指望 window.DATA，
+     但要放在函数内（点击时才执行）——那时网页主体脚本早已跑完。
+
+     v3.0.1 修复：① 恢复 window.ingestBackup 定义（合并 items + banks）；
+                 ② 不再堵 restoreInput.click，保留网页原生兜底路径；
+                 ③ 大文件走原生暂存 + 分块读取（见 readStagedBackup）。 */
   function patchImport() {
     if (!native) return;
-    var restore = document.getElementById("restoreInput");
-    if (restore) restore.click = function () {};
+
+    function b64ToBytes(b64) {
+      var bin = atob(b64);
+      var u8 = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+      return u8;
+    }
+    /* 分块拼接必须在**字节层**做：chunk 边界可能正好切在一个 UTF-8 多字节
+       字符中间，逐块 decode 会把汉字拼成乱码。所以攒够字节再一次性解码。 */
+    function bytesToText(chunks) {
+      var total = 0, i;
+      for (i = 0; i < chunks.length; i++) total += chunks[i].length;
+      var buf = new Uint8Array(total);
+      var p = 0;
+      for (i = 0; i < chunks.length; i++) { buf.set(chunks[i], p); p += chunks[i].length; }
+      try {
+        return new TextDecoder("utf-8").decode(buf);
+      } catch (e) {
+        var s = "";
+        for (i = 0; i < buf.length; i++) s += String.fromCharCode(buf[i]);
+        try { return decodeURIComponent(escape(s)); } catch (e2) { return s; }
+      }
+    }
+
+    /* 大于阈值（Swift 侧定为 3MB）的 JSON 由原生写进沙盒，
+       这里按 256KB 分块拉回来再拼。 */
+    function readStagedBackup(onText, onErr) {
+      var CHUNK = 256 * 1024;
+      var chunks = [];
+      var offset = 0;
+      var guard = 0;
+      function step() {
+        if (++guard > 2000) { onErr("分块过多，已中止"); return; }
+        window.__SB.readImportChunk(offset, CHUNK).then(function (r) {
+          if (!r || r.error) { onErr((r && r.error) || "读取失败"); return; }
+          if (r.data) chunks.push(b64ToBytes(r.data));
+          if (r.next != null) offset = r.next;
+          if (r.eof) { onText(bytesToText(chunks)); return; }
+          if (r.next == null) { onErr("读取中断"); return; }
+          step();
+        }).catch(function (e) { onErr((e && e.message) || String(e)); });
+      }
+      step();
+    }
+
+    /* 合并备份进当前题库。与网页 #restoreInput 的 change 处理器保持同样的副作用，
+       少一个都会导致"导进去了但列表/筛选不刷新"，看起来还是像没反应。 */
+    window.ingestBackup = function (text) {
+      var d;
+      try {
+        d = JSON.parse(text);
+      } catch (e) {
+        toast("恢复失败：备份不是合法的 JSON 文件");
+        return false;
+      }
+      if (!d || !Array.isArray(d.items)) {
+        toast("恢复失败：备份格式不对（缺少 items 数组）");
+        return false;
+      }
+      var n = d.items.length;
+      window.confirm2("导入恢复", "将合并 " + n + " 条记录到当前题库？", function () {
+        try {
+          d.items.forEach(function (it) { if (!it.id) it.id = uid(); });
+          DATA.items = DATA.items.concat(d.items);
+          // 合并备份里的题库定义，避免恢复后题目归属悬空
+          if (Array.isArray(d.banks)) {
+            var ids = {};
+            (DATA.banks || []).forEach(function (b) { ids[b.id] = true; });
+            d.banks.forEach(function (b) {
+              if (!ids[b.id]) { DATA.banks.push(b); ids[b.id] = true; }
+            });
+          }
+          if (typeof save === "function") save();
+          if (typeof fillCatFilter === "function") fillCatFilter();
+          if (typeof fillBankSelects === "function") fillBankSelects();
+          if (typeof renderManageIfOpen === "function") renderManageIfOpen();
+          if (typeof renderPPTypeRows === "function") renderPPTypeRows();
+          if (typeof renderHome === "function") renderHome();
+          toast("已恢复 " + n + " 条");
+        } catch (err) {
+          toast("恢复失败：" + ((err && err.message) || err));
+        }
+      });
+      return true;
+    };
+
+    function importOneJson(f) {
+      if (f.staged) {
+        toast("正在读取备份…");
+        readStagedBackup(
+          function (text) { window.ingestBackup(text); },
+          function (msg) { toast("读取备份失败：" + msg); }
+        );
+      } else if (f.data != null && f.data !== "") {
+        window.ingestBackup(decodeB64(f.data));
+      } else {
+        toast("拿不到文件内容：" + (f.name || ""));
+      }
+    }
 
     function intercept(btnId) {
       var btn = document.getElementById(btnId);
@@ -1130,26 +1256,27 @@
         e.preventDefault();
         e.stopImmediatePropagation();
         window.__SB.pickFiles().then(function (files) {
-          if (!files || !files.length) return;
+          if (!files || !files.length) return;   // 用户取消
           files.forEach(function (f) {
             try {
-              var name = String(f.name || "").toLowerCase();
-              if (name.indexOf(".json") >= 0) {
-                if (isFn("ingestBackup")) window.ingestBackup(decodeB64(f.data));
+              var name = String(f.name || "");
+              if (name.toLowerCase().indexOf(".json") >= 0) {
+                importOneJson(f);
               } else {
+                if (!isFn("handleFile")) { toast("当前版本不支持导入：" + name); return; }
                 var blob = dataURLtoBlob(
                   "data:" + (f.mime || "application/octet-stream") + ";base64," + f.data
                 );
-                if (!blob) { toast("文件解析失败：" + f.name); return; }
-                var file = new File([blob], f.name, { type: f.mime || blob.type });
-                if (isFn("handleFile")) window.handleFile(file);
-                else toast("当前版本不支持该文件导入");
+                if (!blob) { toast("文件解析失败：" + name); return; }
+                window.handleFile(new File([blob], name, { type: f.mime || blob.type }));
               }
             } catch (err) {
               toast("导入失败：" + ((err && err.message) || err));
             }
           });
-        }).catch(function () { toast("选择文件失败"); });
+        }).catch(function (e) {
+          toast("选择文件失败：" + ((e && e.message) || e));
+        });
       }, true);
     }
     intercept("btnImport");

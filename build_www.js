@@ -61,15 +61,20 @@ if (html.indexOf(BRIDGE_TAG) >= 0) {
 html = html.slice(0, openTagIdx) + BRIDGE_TAG + "\n" + html.slice(openTagIdx);
 
 /* ---------- 4. 版本号标注手机版 ---------- */
+/* 额外带一个「手机版构建号 mN」：手机版和电脑版共用 vX.Y.Z（单一源），
+   但手机版会独立修补，装了新版却看不出来是哪个 —— 这个 mN 就是给用户
+   核对"我装的到底是不是刚出的那个包"用的。改手机版配套文件时手动 +1。 */
+const MOBILE_BUILD = "m2";   // m1 = 首次移植 v3.0；m2 = 修复导入静默失效 + 大文件分块读取
 const verRe = /当前版本 <b>(v[0-9.]+)<\/b>/;
 const m = verRe.exec(html);
 if (m) {
   html = html.replace(
     verRe,
     '当前版本 <b>' + m[1] + '</b> <span style="display:inline-block;padding:1px 8px;border-radius:8px;' +
-    'background:#eaf1ff;color:#1d4ed8;font-size:12px;font-weight:600;margin-left:2px;">手机版 · iOS</span>'
+    'background:#eaf1ff;color:#1d4ed8;font-size:12px;font-weight:600;margin-left:2px;">手机版 · iOS ' +
+    MOBILE_BUILD + '</span>'
   );
-  console.log("版本号已标注：" + m[1] + "（手机版 · iOS）");
+  console.log("版本号已标注：" + m[1] + "（手机版 · iOS " + MOBILE_BUILD + "）");
 } else {
   console.warn("⚠ 没找到「当前版本 vX.Y.Z」字样，跳过版本标注");
 }

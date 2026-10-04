@@ -60,4 +60,53 @@ enum LocalStore {
         try? FileManager.default.removeItem(at: alias)
         try? FileManager.default.copyItem(at: url, to: alias)
     }
+
+    // MARK: - 待导入备份的暂存（v3.0.1）
+
+    /// 用户从电脑导出的备份可能有 8MB，base64 后约 10.7MB。
+    /// 一次性把它塞进 evaluateJavaScript 的字符串参数既慢、又可能静默失败
+    /// （失败时用户只看到"导入没反应"）。所以大文件先落到这里，
+    /// 再由 JS 用 readImportChunk 分块取。
+    /// 与 data.json 同目录；每次导入覆盖写，不会堆积。
+    static func importStagingURL() -> URL {
+        return dataFileURL().deletingLastPathComponent()
+            .appendingPathComponent("import-staged.json")
+    }
+
+    /// 把选中的备份写进暂存文件；成功返回 URL，失败返回 nil（调用方退回 base64）。
+    static func stageImport(_ data: Data) -> URL? {
+        let url = importStagingURL()
+        do {
+            try data.write(to: url, options: .atomic)
+            return url
+        } catch {
+            return nil
+        }
+    }
+
+    /// 读取暂存文件的一段。返回 (base64 片段, 下一偏移, 是否读到末尾, 总大小)。
+    ///
+    /// 注意：这里返回的是**原始字节**的 base64 片段，JS 侧必须在字节层拼接
+    /// 之后再整体解 UTF-8 —— 分块边界可能正好切在一个汉字中间，
+    /// 逐块 decode 会把汉字拼成乱码。
+    static func readImportChunk(offset: Int, length: Int) -> (b64: String, next: Int, eof: Bool, size: Int)? {
+        let url = importStagingURL()
+        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+
+        let attrs = try? FileManager.default.attributesOfItem(atPath: url.path)
+        let total = (attrs?[.size] as? Int) ?? 0
+
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
+        defer { try? handle.close() }
+
+        // 上限 4MB：JS 侧按 256KB 请求，这个上限只是防御异常参数
+        let want = max(1, min(length, 4 * 1024 * 1024))
+        let start = max(0, min(offset, total))
+
+        try? handle.seek(toOffset: UInt64(start))
+        let chunk = (try? handle.read(upToCount: want)) ?? Data()
+        let next = start + chunk.count
+
+        return (chunk.base64EncodedString(), next, next >= total, total)
+    }
 }

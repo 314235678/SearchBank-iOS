@@ -33,9 +33,25 @@
               initiatedByFrame:(WKFrameInfo *)frame
              completionHandler:(void (^)(NSArray<NSURL *> * _Nullable))completionHandler {
     self.currentCompletion = [completionHandler copy];
-    NSMutableArray<UTType *> *types = [NSMutableArray arrayWithObject:[UTType typeWithIdentifier:@"public.image"]];
-    UTType *docx = [UTType typeWithIdentifier:@"org.openxmlformats.wordprocessingml.document"];
-    if (docx) { [types insertObject:docx atIndex:0]; }
+    // 网页里所有 <input type=file> 共用这个面板，用途并不相同：
+    //   #restoreInput → accept=".json"（导入电脑版导出的备份）
+    //   其它          → 图片 / docx / xlsx（OCR 与题库导入）
+    // 原先只放行 image + docx，结果是 <input accept=".json"> 里**根本选不到 json**，
+    // 一旦 JS 桥接没接住，网页自带的兜底路径也是死的。
+    // 这里放宽为「文档 + 图片 + 任意数据」，两条路都留活口。
+    NSMutableArray<UTType *> *types = [NSMutableArray array];
+    NSArray<NSString *> *idents = @[
+        @"org.openxmlformats.wordprocessingml.document",   // docx
+        @"org.openxmlformats.spreadsheetml.sheet",         // xlsx
+        @"public.json",
+        @"public.comma-separated-values-text",
+        @"public.image",
+        @"public.data"                                     // 兜底：任意文件
+    ];
+    for (NSString *ident in idents) {
+        UTType *t = [UTType typeWithIdentifier:ident];
+        if (t) { [types addObject:t]; }
+    }
     UIDocumentPickerViewController *picker = [[UIDocumentPickerViewController alloc]
         initForOpeningContentTypes:types asCopy:YES];
     // WKOpenPanelParameters 在 WebKit 中是 forward-declared 类，无法访问任何属性

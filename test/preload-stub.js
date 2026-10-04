@@ -19,8 +19,22 @@
     ocrBlocks: { blocks: [], w: 0, h: 0, scale: 1, cropTop: 0, cropBottom: 0, ow: 0, oh: 0 },
     ocrText: "",
     data: "",
-    aiResult: { ok: false, error: "stub 未设置 aiResult" }
+    aiResult: { ok: false, error: "stub 未设置 aiResult" },
+    // pickFiles 返回什么（模拟用户从「文件」App 选到的文件）
+    pickFilesResult: [],
+    // 模拟原生沙盒里暂存的待导入备份（原始字节）；由 readImportChunk 分块吐出
+    stagedBytes: null
   };
+
+  function bytesToB64(u8) {
+    var s = "";
+    for (var i = 0; i < u8.length; i++) s += String.fromCharCode(u8[i]);
+    return btoa(s);
+  }
+  function utf8Bytes(str) {
+    return new TextEncoder().encode(str);
+  }
+  window.__STUB.utf8Bytes = utf8Bytes;
 
   function respond(id, result) {
     setTimeout(function () {
@@ -78,7 +92,29 @@
               respond(msg.id, { ok: true });
               break;
             case "pickFiles":
-              respond(msg.id, { files: [] });
+              respond(msg.id, { files: window.__STUB.pickFilesResult || [] });
+              break;
+            /* v3.0.1：分块读取暂存备份。
+               刻意按**原始字节**切，不管 UTF-8 边界 —— 真机就是这个行为，
+               桥接层必须在字节层拼接后才解码，否则汉字会被切断成乱码。 */
+            case "readImportChunk":
+              (function () {
+                var buf = window.__STUB.stagedBytes;
+                if (!buf) {
+                  respond(msg.id, { error: "没有待导入的备份文件（请重新选择文件）" });
+                  return;
+                }
+                var off = payload.offset || 0;
+                var len = payload.length || 262144;
+                var slice = buf.slice(off, Math.min(off + len, buf.length));
+                var next = off + slice.length;
+                respond(msg.id, {
+                  data: bytesToB64(slice),
+                  next: next,
+                  eof: next >= buf.length,
+                  size: buf.length
+                });
+              })();
               break;
             default:
               respond(msg.id, { ok: true });
