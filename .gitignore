@@ -22,6 +22,8 @@ _bak_*/
 
 # 本地临时文件（提交信息草稿、推送/抓包日志）
 _cmsg*.txt
+# E2E 里"模拟 App 沙盒"的落盘文件（每轮开跑前会删，不该进仓库）
+test/_stub-persist.json
 _commitmsg*.txt
 _push.log
 _trace.log

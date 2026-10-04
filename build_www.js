@@ -64,10 +64,11 @@ html = html.slice(0, openTagIdx) + BRIDGE_TAG + "\n" + html.slice(openTagIdx);
 /* 额外带一个「手机版构建号 mN」：手机版和电脑版共用 vX.Y.Z（单一源），
    但手机版会独立修补，装了新版却看不出来是哪个 —— 这个 mN 就是给用户
    核对"我装的到底是不是刚出的那个包"用的。改手机版配套文件时手动 +1。 */
-const MOBILE_BUILD = "m5";   // m1 = 首次移植 v3.0；m2 = 修复导入 + 大文件分块；
+const MOBILE_BUILD = "m6";   // m1 = 首次移植 v3.0；m2 = 修复导入 + 大文件分块；
                              // m3 = 相册取图 + 快捷指令别名 + 剪贴板监听 + 内置题库装载；
                              // m4 = 跟随电脑版 v1.0.62（输入清洗/选项识别）+ 删掉最近搜过 + 结果卡片版面；
                              // m5 = 跟随电脑版 v1.0.63（题干是套话时按选项整条比对）
+                             // m6 = AI 模型设置持久化到沙盒文件（重启不丢）+ 原生 confirm/alert/prompt 生效（删除按钮可用）
 const verRe = /当前版本 <b>(v[0-9.]+)<\/b>/;
 const m = verRe.exec(html);
 if (m) {

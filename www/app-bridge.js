@@ -181,6 +181,30 @@
     return post("dataPath", {}).then(function (r) { return (r && r.path) || ""; });
   };
 
+  /* m6：设置持久化（Documents/SearchBank/settings.json，与电脑版同名同格式） */
+  window.__SB.loadSettings = function () {
+    return post("loadSettings", {}).then(function (r) {
+      return r && typeof r.text === "string" ? r.text : "";
+    });
+  };
+  window.__SB.saveSettings = function (text) {
+    return post("saveSettings", { text: text }).then(function (r) {
+      return !(r && r.error);
+    });
+  };
+
+  /* m6：通用小键值存储（原生 UserDefaults）—— 用来兜住"其余会丢的
+     localStorage 键"，见后面 patchDurableStorage。 */
+  window.__SB.setSetting = function (key, value) {
+    return post("setSetting", { key: String(key || ""), value: value });
+  };
+  window.__SB.getSetting = function (key) {
+    return post("getSetting", { key: String(key || "") }).then(function (r) {
+      if (r && r.error) return undefined;
+      return r ? r.value : undefined;
+    });
+  };
+
   window.__SB.captureImage = function () {
     return post("captureImage", {}).then(function (r) {
       if (r && r.error) throw new Error(r.error);
@@ -349,18 +373,41 @@
       return Promise.resolve({ ok: false });
     },
 
-    /* 设置：iOS 上没有独立 settings.json，用 localStorage 镜像即可。
-       返回镜像内容 —— 首次为空对象，网页保持它自己的 localStorage 设置；
-       之后两者一致，merge 幂等。 */
+    /* m6：设置真正落盘到 Documents/SearchBank/settings.json，
+       与电脑版 <数据目录>/settings.json **同名同格式**，两边可互相拷贝迁移。
+
+       ⚠ 这里原来是"再写一份 localStorage"（sb_settings_mirror）——
+       而 iOS 的 WKWebView 用 file:// 加载页面时，这种不透明来源的
+       localStorage 只存在内存里，App 一关就没了，等于设置根本没存。
+       用户报的「添加 AI 模型 → 保存 → 重启就没了」就是这个根因。
+       网页的 saveSettings() 会双写（localStorage + 这里），所以读取以文件为准；
+       文件为空（首次运行 / 外部清空）时才退回 localStorage 影子。 */
     readSettings: function () {
-      try {
-        var t = localStorage.getItem("sb_settings_mirror");
-        return Promise.resolve(t ? JSON.parse(t) : {});
-      } catch (e) { return Promise.resolve({}); }
+      function fromMirror() {
+        try {
+          var m = localStorage.getItem("sb_settings_mirror");
+          return m ? JSON.parse(m) : {};
+        } catch (e) { return {}; }
+      }
+      return window.__SB.loadSettings().then(function (t) {
+        if (t) {
+          try {
+            var o = JSON.parse(t);
+            if (o && typeof o === "object" && !Array.isArray(o)) return o;
+          } catch (e) {}
+        }
+        return fromMirror();
+      }).catch(fromMirror);
     },
     writeSettings: function (s) {
-      try { localStorage.setItem("sb_settings_mirror", JSON.stringify(s || {})); } catch (e) {}
-      return Promise.resolve({ ok: true });
+      var txt = JSON.stringify(s || {});
+      /* 同步留一份内存影子：网页的 settings() 是同步读 localStorage 的，
+         本次会话内要立刻可见。真正的持久化交给原生文件。 */
+      try { localStorage.setItem("sb_settings_mirror", txt); } catch (e) {}
+      return window.__SB.saveSettings(txt).then(function (ok) {
+        if (!ok) console.warn("[bridge] 设置写入沙盒失败（重启后可能丢失）");
+        return { ok: !!ok };
+      }).catch(function () { return { ok: false }; });
     }
   };
 
@@ -1817,6 +1864,135 @@
 
   /* 调试/自测出口：把纯函数暴露出来，便于无头环境（Electron/Node）单测。
      对线上行为没有任何影响。 */
+  /* ==================================================================
+   * 12. localStorage 持久化兜底（m6）
+   *
+   *     iOS 的 WKWebView 用 file:// 加载页面 —— 这种"不透明来源"的
+   *     localStorage **只存在内存里，App 一关就全没了**。受影响的不只是设置：
+   *       自建纠错词典 souti_typo_user
+   *       AI 对话历史   sb_ai_sessions_v1
+   *       识别历史      souti_ocrHist
+   *       上次选的题库  souti_mBank / souti_impBank
+   *     这些都是"用户以为自己已经存下来了"的东西。这里统一兜住：
+   *     把 localStorage 里**除题库数据与设置以外**的键镜像到原生（UserDefaults，
+   *     真正落盘），启动时读回来灌进 localStorage。
+   *
+   *     为什么排除那两个：
+   *       题库数据 wb_searchbank_v1  → 已由 data.json 负责，体量大（8MB 级）
+   *       设置     wb_searchbank_settings → 已由 settings.json 负责（与电脑版同名同格式）
+   *     一个东西只有一个家，避免两处不一致。
+   * ================================================================== */
+  var LS_SKIP = {
+    "wb_searchbank_v1": 1,          // 题库数据（另走 data.json）
+    "wb_searchbank_settings": 1,    // 设置（另走 settings.json）
+    "sb_settings_mirror": 1         // 设置的内存影子，不必再镜像
+  };
+  var LS_MAX_VALUE = 262144;        // 单值上限 256KB：防意外写入大对象把存储撑爆
+  var _lsTimer = null;
+  var _lsReady = false;             // 镜像读回来之前**绝不落盘**
+  var _lsRestoring = false;
+  var _lsPaused = false;            // 仅供测试：模拟"App 被杀"前先停掉落盘
+
+  function lsSnapshot() {
+    var out = {};
+    try {
+      var ls = window.localStorage;
+      for (var i = 0; i < ls.length; i++) {
+        var k = ls.key(i);
+        if (!k || LS_SKIP[k]) continue;
+        var v = ls.getItem(k);
+        if (typeof v === "string" && v.length <= LS_MAX_VALUE) out[k] = v;
+      }
+    } catch (e) {}
+    return out;
+  }
+
+  function lsFlush() {
+    /* 关键防线：启动时"先读镜像"是异步的。如果在这之前就落盘，
+       localStorage 此时还是空的 → 键表写成 [] → **把已有镜像清空**，
+       用户上次的东西就永久没了。所以必须等 _lsReady。 */
+    if (!native || !_lsReady || _lsPaused) return;
+    var snap = lsSnapshot();
+    var keys = Object.keys(snap);
+    /* 先写键表再写值。键表是"权威清单"：被删掉的键不在里面，
+       启动时就不会被还原回来（UserDefaults 里残留的旧值留着无害）。 */
+    window.__SB.setSetting("__ls_mirror_keys", JSON.stringify(keys)).catch(function () {});
+    keys.forEach(function (k) {
+      window.__SB.setSetting("__ls_mirror_" + k, snap[k]).catch(function () {});
+    });
+  }
+
+  function lsSchedule() {
+    if (_lsTimer) clearTimeout(_lsTimer);
+    _lsTimer = setTimeout(function () { _lsTimer = null; lsFlush(); }, 400);
+  }
+
+  /* 网页里对 localStorage 的写没有一个统一入口，只能从 Storage.prototype 这层拦。 */
+  function patchDurableStorage() {
+    if (!native) return;
+    var proto = window.Storage && window.Storage.prototype;
+    if (!proto || proto.__sbDurable) return;
+    var origSet = proto.setItem, origRemove = proto.removeItem, origClear = proto.clear;
+    if (typeof origSet !== "function") return;
+    try { proto.__sbDurable = true; } catch (e) { return; }
+    var isOurs = function (self) { try { return self === window.localStorage; } catch (e) { return false; } };
+    proto.setItem = function (k, v) {
+      var r = origSet.apply(this, arguments);
+      if (isOurs(this) && !LS_SKIP[k] && !_lsRestoring) lsSchedule();
+      return r;
+    };
+    proto.removeItem = function (k) {
+      var r = origRemove.apply(this, arguments);
+      if (isOurs(this)) lsSchedule();
+      return r;
+    };
+    proto.clear = function () {
+      var r = origClear.apply(this, arguments);
+      if (isOurs(this)) lsSchedule();
+      return r;
+    };
+    /* 切后台 / 关页时立刻落盘：防抖窗口内被系统杀进程的话那一次改动就丢了 */
+    try {
+      window.addEventListener("pagehide", function () {
+        if (_lsTimer) { clearTimeout(_lsTimer); _lsTimer = null; }
+        lsFlush();
+      });
+      document.addEventListener("visibilitychange", function () {
+        if (document.visibilityState === "hidden") {
+          if (_lsTimer) { clearTimeout(_lsTimer); _lsTimer = null; }
+          lsFlush();
+        }
+      });
+    } catch (e) {}
+  }
+
+  /* 启动时把镜像灌回 localStorage。只补"当前不存在"的键 ——
+     存在就说明是本次会话新写的（iOS 上 localStorage 每次启动都是空的），
+     不能被旧镜像盖掉。 */
+  function restoreDurableStorage() {
+    if (!native) { _lsReady = true; return Promise.resolve(); }
+    _lsRestoring = true;
+    return window.__SB.getSetting("__ls_mirror_keys").then(function (raw) {
+      if (!raw || typeof raw !== "string") return;
+      var keys;
+      try { keys = JSON.parse(raw); } catch (e) { return; }
+      if (!Array.isArray(keys) || !keys.length) return;
+      return Promise.all(keys.map(function (k) {
+        if (typeof k !== "string" || !k || LS_SKIP[k]) return null;
+        return window.__SB.getSetting("__ls_mirror_" + k).then(function (v) {
+          if (typeof v === "string" && v.length <= LS_MAX_VALUE) {
+            try {
+              if (window.localStorage.getItem(k) === null) window.localStorage.setItem(k, v);
+            } catch (e) {}
+          }
+        }).catch(function () {});
+      }));
+    }).catch(function () {}).then(function () {
+      _lsRestoring = false;
+      _lsReady = true;
+    });
+  }
+
   window.__SB.__test = {
     sanitizePage: sanitizePage,
     rowGroupBlocks: rowGroupBlocks,
@@ -1827,7 +2003,15 @@
     isFn: isFn,
     // 供无头测试直接驱动「内置题库装载」这条链路
     seedFromBundle: seedFromBundle,
-    isDataReady: function () { return __dataReadyFlag; }
+    isDataReady: function () { return __dataReadyFlag; },
+    // m6：localStorage 持久化兜底（供测试直接驱动与观察）
+    lsSnapshot: lsSnapshot,
+    lsFlush: lsFlush,
+    restoreDurableStorage: restoreDurableStorage,
+    isLsReady: function () { return _lsReady; },
+    // 测试用：暂停落盘（模拟"内存里的 localStorage 被系统清空"时不许再写镜像）
+    pauseLsFlush: function () { _lsPaused = true; },
+    lsSkip: LS_SKIP
   };
   function syncNativeOcrSettings() {
     if (!native) return;
@@ -1918,6 +2102,13 @@
       }
     }, true);
   }
+
+  /* 这两件事必须在**网页主体脚本执行之前**就跑：
+     patch   —— 否则主体脚本顶层的 localStorage 写不会被捕获；
+     restore —— 越早把镜像灌回越好，缩短"读到空值"的时间窗。
+     桥接脚本本来就注入在主体脚本之前，所以直接在这里调用。 */
+  patchDurableStorage();
+  restoreDurableStorage();
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", boot);

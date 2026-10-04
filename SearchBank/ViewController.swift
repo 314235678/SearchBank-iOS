@@ -205,6 +205,14 @@ class ViewController: UIViewController,
             handleLoadData(id: id)
         case "saveData":
             handleSaveData(id: id, payload: payload)
+        // m6：设置持久化到 Documents/SearchBank/settings.json。
+        // 网页的 saveSettings() 本来就是双写（localStorage + desktopFS 文件），
+        // 但 iOS 上 file:// 页面的 localStorage 不落盘，桥接当时又把它"再写一份
+        // localStorage"，于是设置等于没存 —— 添加 AI 模型重启就丢的根因。
+        case "loadSettings":
+            handleLoadSettings(id: id)
+        case "saveSettings":
+            handleSaveSettings(id: id, payload: payload)
         case "dataPath":
             handleDataPath(id: id)
         case "captureImage":
@@ -261,6 +269,24 @@ class ViewController: UIViewController,
         let ok = LocalStore.write(text)
         if ok { LocalStore.ensureFinderVisible() }
         respond(id: id, result: ok ? ["ok": true] : ["error": "写入失败"])
+    }
+
+    /// JS 启动时调用：拿设置文件（不存在返回空串，让前端走默认值）。
+    private func handleLoadSettings(id: String) {
+        let text = LocalStore.readSettings() ?? ""
+        respond(id: id, result: ["text": text])
+    }
+
+    /// JS 改完设置后调用：写回 Documents/SearchBank/settings.json。
+    /// 失败必须把 error 回给 JS —— 设置存不住是用户能直接感觉到的，
+    /// 静默失败会让人以为"保存成功了"，然后重启才发现没了。
+    private func handleSaveSettings(id: String, payload: [String: Any]) {
+        guard let text = payload["text"] as? String else {
+            respond(id: id, result: ["error": "缺少 text"])
+            return
+        }
+        let ok = LocalStore.writeSettings(text)
+        respond(id: id, result: ok ? ["ok": true] : ["error": "写入设置失败"])
     }
 
     /// JS 调试用：拿到 App 沙盒下文件的真实路径（提示用户）。
@@ -751,6 +777,60 @@ extension ViewController: WKNavigationDelegate, WKUIDelegate {
                  decidePolicyFor navigationAction: WKNavigationAction,
                  decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
         decisionHandler(.allow)
+    }
+
+    // MARK: - JS 弹窗（m6）
+
+    /// WKWebView 里如果宿主不实现这三个委托，WebKit 会**不弹窗直接回结果**：
+    /// confirm() 恒返回 false、alert() 什么也不做。
+    /// 网页里"删除模型""清空会话"都是 `if(!confirm(...))return;`，
+    /// 于是表现为"点了没反应" —— 用户报的就是这个。
+    /// OpenPanelShim 已经把这三个委托转发到这里，只要实现出来就有原生对话框。
+    func webView(_ webView: WKWebView,
+                 runJavaScriptAlertPanelWithMessage message: String,
+                 initiatedByFrame frame: WKFrameInfo,
+                 completionHandler: @escaping () -> Void) {
+        let box = UIAlertController(title: nil, message: message, preferredStyle: .alert)
+        box.addAction(UIAlertAction(title: "知道了", style: .default) { _ in completionHandler() })
+        presentJSAlert(box) { completionHandler() }
+    }
+
+    func webView(_ webView: WKWebView,
+                 runJavaScriptConfirmPanelWithMessage message: String,
+                 initiatedByFrame frame: WKFrameInfo,
+                 completionHandler: @escaping (Bool) -> Void) {
+        let box = UIAlertController(title: nil, message: message, preferredStyle: .alert)
+        box.addAction(UIAlertAction(title: "取消", style: .cancel) { _ in completionHandler(false) })
+        box.addAction(UIAlertAction(title: "确定", style: .default) { _ in completionHandler(true) })
+        // 弹不出来时按"取消"回，绝不能吞掉 completionHandler：
+        // 否则 JS 侧会一直等这个回调，页面看起来像卡死。
+        presentJSAlert(box) { completionHandler(false) }
+    }
+
+    func webView(_ webView: WKWebView,
+                 runJavaScriptTextInputPanelWithPrompt prompt: String,
+                 defaultText: String?,
+                 initiatedByFrame frame: WKFrameInfo,
+                 completionHandler: @escaping (String?) -> Void) {
+        let box = UIAlertController(title: nil, message: prompt, preferredStyle: .alert)
+        box.addTextField { tf in tf.text = defaultText }
+        box.addAction(UIAlertAction(title: "取消", style: .cancel) { _ in completionHandler(nil) })
+        box.addAction(UIAlertAction(title: "确定", style: .default) { [weak box] _ in
+            completionHandler(box?.textFields?.first?.text)
+        })
+        presentJSAlert(box) { completionHandler(nil) }
+    }
+
+    /// 在"最上层"的控制器上弹窗（可能已经有别的 modal 在前面）。
+    /// 万一连弹都弹不出来也必须回调 fallback。
+    private func presentJSAlert(_ box: UIAlertController, fallback: @escaping () -> Void) {
+        var top: UIViewController = self
+        while let p = top.presentedViewController, !p.isBeingDismissed { top = p }
+        guard !top.isBeingDismissed, top.view.window != nil else {
+            fallback()
+            return
+        }
+        top.present(box, animated: true)
     }
 
     // 注：webView(_:runOpenPanelWith:initiatedByFrame:completionHandler:) 方法实现在

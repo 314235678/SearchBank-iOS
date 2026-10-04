@@ -43,6 +43,37 @@
   }
   window.__STUB.utf8Bytes = utf8Bytes;
 
+  /* =====================================================================
+   * 沙盒持久化模拟（m6）
+   * ---------------------------------------------------------------------
+   * 真机上「设置 / 其它小键值」是写进沙盒文件的。这里必须也**真的落盘**，
+   * 否则测不出「保存后重启还在不在」—— 内存变量在页面 reload 后就没了，
+   * 而 reload 正是我们用来模拟"重启 App"的手段。
+   * 落盘位置：test/_stub-persist.json（E2E 每次开跑前会删除它，保证干净）。
+   * ===================================================================== */
+  var fs = null, STORE_PATH = null;
+  try {
+    fs = require("fs");
+    STORE_PATH = require("path").join(__dirname, "_stub-persist.json");
+  } catch (e) { fs = null; }
+
+  function loadStore() {
+    if (!fs) return { settings: "", kv: {} };
+    try {
+      var o = JSON.parse(fs.readFileSync(STORE_PATH, "utf8"));
+      if (!o || typeof o !== "object") return { settings: "", kv: {} };
+      if (!o.kv) o.kv = {};
+      return o;
+    } catch (e) { return { settings: "", kv: {} }; }
+  }
+  function saveStore() {
+    if (!fs) return;
+    try { fs.writeFileSync(STORE_PATH, JSON.stringify(STORE), "utf8"); } catch (e) {}
+  }
+  var STORE = loadStore();
+  window.__STUB_STORE = STORE;
+  window.__STUB_PERSIST_OK = !!fs;
+
   function respond(id, result) {
     setTimeout(function () {
       try {
@@ -112,12 +143,32 @@
               respond(msg.id, { dataUrl: window.__STUB.imageResult });
               break;
             case "writeClipboard":
-            case "setSetting":
             case "processURL":
               respond(msg.id, { ok: true });
               break;
+            /* m6：设置读写（真机 = Documents/SearchBank/settings.json） */
+            case "loadSettings":
+              respond(msg.id, { text: STORE.settings || "" });
+              break;
+            case "saveSettings":
+              STORE.settings = payload.text || "";
+              saveStore();
+              respond(msg.id, { ok: true });
+              break;
+            /* m6：小键值读写（真机 = 原生 UserDefaults，用于 localStorage 镜像） */
+            case "setSetting":
+              STORE.kv[String(payload.key || "")] = payload.value;
+              saveStore();
+              respond(msg.id, { ok: true });
+              break;
             case "getSetting":
-              respond(msg.id, { value: null });
+              (function () {
+                var k = String(payload.key || "");
+                /* 真机缺键时会走到 respond 的 json-encode 兜底、回 {error:...}；
+                   这里直接回 null，让桥接把"没有"和"有值"分开。 */
+                respond(msg.id, Object.prototype.hasOwnProperty.call(STORE.kv, k)
+                  ? { value: STORE.kv[k] } : { value: null });
+              })();
               break;
             case "shareExport":
             case "shareBinary":

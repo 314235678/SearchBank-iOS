@@ -44,6 +44,24 @@ function staticCheck() {
   chk("静态：电脑版函数总数 = " + names.size, names.size > 300, String(names.size));
   chk("静态：打包后一个函数都不缺", missing.length === 0,
     missing.length ? ("缺 " + missing.length + " 个：" + missing.slice(0, 12).join(", ")) : "全部在位");
+
+  /* m6：WKWebView 里 confirm()/alert() 只有宿主实现了 WKUIDelegate 才会弹窗，
+     否则 WebKit 直接返回 false / 什么都不做。网页里「删除模型」「清空会话」都是
+     `if(!confirm(...))return;`，于是表现为"点了没反应"。这几条静态守住"必须实现"。 */
+  const swiftDir = path.join(__dirname, "..", "SearchBank");
+  const vc = fs.readFileSync(path.join(swiftDir, "ViewController.swift"), "utf8");
+  const shim = fs.readFileSync(path.join(swiftDir, "OpenPanelShim.m"), "utf8");
+  const store = fs.readFileSync(path.join(swiftDir, "LocalStore.swift"), "utf8");
+  chk("静态：实现了 runJavaScriptConfirmPanel（删除等确认框的前提）",
+    /runJavaScriptConfirmPanelWithMessage/.test(vc));
+  chk("静态：实现了 runJavaScriptAlertPanel", /runJavaScriptAlertPanelWithMessage/.test(vc));
+  chk("静态：实现了 runJavaScriptTextInputPanel", /runJavaScriptTextInputPanelWithPrompt/.test(vc));
+  chk("静态：OpenPanelShim 把这三个委托转回 Swift",
+    /runJavaScriptConfirmPanelWithMessage/.test(shim) && /runJavaScriptAlertPanelWithMessage/.test(shim));
+  chk("静态：原生有 loadSettings / saveSettings 通道",
+    /case "loadSettings"/.test(vc) && /case "saveSettings"/.test(vc));
+  chk("静态：设置写到沙盒 settings.json（不是再写一份 localStorage）",
+    /settingsFileURL/.test(store) && /settings\.json/.test(store));
   return names.size;
 }
 
@@ -705,6 +723,82 @@ let desktopFnCount = 0;
   }
 })();
 
+/* ---------------- 阶段 2：设置 / 小键值 的持久化（模拟"重启 App"） ----------------
+   真机上这些是写进沙盒文件的；EV 桩用 test/_stub-persist.json 真落盘，
+   然后 reload 一次页面 —— 对网页来说 reload 等价于"App 被重启后重新打开"，
+   因为 iOS 上 file:// 页面的 localStorage 每次启动都是空的（这正是问题本身）。 */
+const PERSIST_FILE = path.join(__dirname, "_stub-persist.json");
+
+const SAVE_BEFORE_RESTART = `
+(async function () {
+  var out = { steps: [] };
+  try {
+    var st = settings();
+    st.models = (st.models || []).concat([{
+      id: "probe_model_m6", name: "探针模型", baseUrl: "https://api.example.com",
+      modelName: "probe-1", apiKey: "sk-probe-key", default: true
+    }]);
+    st.activeModelId = "probe_model_m6";
+    saveSettings(st);
+    out.steps.push("saved-settings");
+
+    localStorage.setItem("souti_typo_user", JSON.stringify([["士", "土"]]));
+    localStorage.setItem("souti_mBank", "我的题库A");
+    /* 这两个键不该被镜像：题库数据走 data.json、设置走 settings.json，
+       一个东西只有一个家，别再存一份（题库那份 8MB 级）。 */
+    localStorage.setItem("wb_searchbank_v1", "SHOULD_NOT_BE_MIRRORED");
+    localStorage.setItem("wb_searchbank_settings", "SHOULD_NOT_BE_MIRRORED");
+
+    // 真机是防抖 400ms 后自动落盘，测试不等这么久，手动催一次
+    window.__SB.__test.lsFlush();
+    await new Promise(function (r) { setTimeout(r, 600); });
+    out.lsReady = window.__SB.__test.isLsReady();
+
+    /* 真机关键点：iOS 上 file:// 的 localStorage 只在内存里，App 一关就空了。
+       Electron 恰恰相反（会落盘），所以必须手动清空才能复现"重启"，
+       否则下面的"恢复"是假通过。清空前先停掉落盘，
+       免得防抖窗口里那一次把空快照写回镜像、把刚存的东西抹掉。 */
+    window.__SB.__test.pauseLsFlush();
+    try { localStorage.clear(); } catch (e) {}
+    out.cleared = localStorage.length;
+    out.ok = true;
+  } catch (e) { out.ok = false; out.error = String(e && (e.message || e)); }
+  return JSON.stringify(out);
+})()
+`;
+
+const VERIFY_AFTER_RESTART = `
+(function () {
+  var out = {};
+  try {
+    var st = settings();
+    var m = (st.models || []).filter(function (x) { return x.id === "probe_model_m6"; });
+    out.modelsTotal = (st.models || []).length;
+    out.found = m.length;
+    out.name = m[0] && m[0].name;
+    out.apiKey = m[0] && m[0].apiKey;
+    out.active = st.activeModelId;
+    out.typo = localStorage.getItem("souti_typo_user");
+    out.mBank = localStorage.getItem("souti_mBank");
+    out.ok = true;
+  } catch (e) { out.ok = false; out.error = String(e && (e.message || e)); }
+  return JSON.stringify(out);
+})()
+`;
+
+/* 这两个字符串也是页面侧脚本，一并做语法自检（同 PAGE_TESTS 的教训） */
+[["SAVE_BEFORE_RESTART", SAVE_BEFORE_RESTART], ["VERIFY_AFTER_RESTART", VERIFY_AFTER_RESTART]]
+  .forEach(function (pair) {
+    try { new Function(pair[1]); }
+    catch (e) {
+      console.error("\n✗ " + pair[0] + " 语法错误：" + ((e && e.message) || e));
+      process.exit(1);
+    }
+  });
+
+/* 每轮开跑前删掉持久化文件，保证从"全新安装"开始，结果可复现 */
+try { fs.unlinkSync(PERSIST_FILE); } catch (e) {}
+
 app.whenReady().then(function () {
   desktopFnCount = staticCheck();
 
@@ -716,11 +810,16 @@ app.whenReady().then(function () {
       preload: path.join(__dirname, "preload-stub.js"),
       contextIsolation: false,
       nodeIntegration: false,
-      webSecurity: false
+      webSecurity: false,
+      /* Electron 31 起 preload 默认跑在 sandbox 里 → 拿不到 require("fs")，
+         持久化桩就没法真的落盘，"重启后还在不在"根本测不出来。
+         真机不存在这个问题（原生 Swift 直接写文件），这里为了测必须关掉。 */
+      sandbox: false
     }
   });
 
   const consoleErrors = [];
+  let consoleErrMark = 0;   // 阶段 2 只看 reload 之后新增的报错
   win.webContents.on("console-message", function (a, b, c) {
     // Electron 新旧两种回调签名都兼容
     const level = (b && typeof b === "object") ? b.level : b;
@@ -729,27 +828,93 @@ app.whenReady().then(function () {
     if (isErr) consoleErrors.push(String(message));
   });
 
+  let loadPhase = 0;
+
   win.webContents.on("did-finish-load", function () {
+    loadPhase++;
+    if (loadPhase === 1) {
+      setTimeout(function () {
+        win.webContents
+          .executeJavaScript(PAGE_TESTS, true)
+          .then(function (res) {
+            (res.rows || []).forEach(function (r) { chk(r.name, r.pass, r.extra); });
+
+            const pageErrors = res.errors || [];
+            chk("页面无未捕获 JS 报错", pageErrors.length === 0,
+              pageErrors.length ? pageErrors.slice(0, 3).join(" | ") : "无");
+            chk("控制台无 error 级输出", consoleErrors.length === 0,
+              consoleErrors.length ? consoleErrors.slice(0, 3).join(" | ") : "无");
+
+            runSavePhase();
+          })
+          .catch(function (err) {
+            chk("页面测试脚本本身执行成功", false, err && err.message);
+            finish();
+          });
+      }, 500);
+      return;
+    }
+
+    // 第二次 did-finish-load = reload 之后（等价于"重启 App 再打开"）
     setTimeout(function () {
       win.webContents
-        .executeJavaScript(PAGE_TESTS, true)
-        .then(function (res) {
-          (res.rows || []).forEach(function (r) { chk(r.name, r.pass, r.extra); });
-
-          const pageErrors = res.errors || [];
-          chk("页面无未捕获 JS 报错", pageErrors.length === 0,
-            pageErrors.length ? pageErrors.slice(0, 3).join(" | ") : "无");
-          chk("控制台无 error 级输出", consoleErrors.length === 0,
-            consoleErrors.length ? consoleErrors.slice(0, 3).join(" | ") : "无");
-
+        .executeJavaScript(VERIFY_AFTER_RESTART, true)
+        .then(function (raw) {
+          const v = JSON.parse(raw);
+          chk("重启后：页面脚本正常初始化", v.ok === true, v.error || "");
+          chk("重启后：AI 模型还在（设置真的落到沙盒文件了）",
+            v.found === 1, "找到 " + v.found + " 条 / 共 " + v.modelsTotal + " 条");
+          chk("重启后：模型名与密钥完好",
+            v.name === "探针模型" && v.apiKey === "sk-probe-key", (v.name || "") + " / " + (v.apiKey || ""));
+          chk("重启后：默认模型标记保留", v.active === "probe_model_m6", String(v.active));
+          chk("重启后：纠错词典（走 localStorage 镜像）也恢复了",
+            v.typo === JSON.stringify([["士", "土"]]), String(v.typo));
+          chk("重启后：上次选的题库（小键值）也恢复了",
+            v.mBank === "我的题库A", String(v.mBank));
+          const errsAfter = consoleErrors.slice(consoleErrMark);
+          chk("重启后：控制台无 error 级输出", errsAfter.length === 0,
+            errsAfter.length ? errsAfter.slice(0, 3).join(" | ") : "无");
           finish();
         })
         .catch(function (err) {
-          chk("页面测试脚本本身执行成功", false, err && err.message);
+          chk("重启后：页面脚本执行成功", false, err && err.message);
           finish();
         });
-    }, 500);
+    }, 1400);
   });
+
+  /* 阶段 2 第一步：按网页真实入口存一条 AI 模型 + 一个"小键值"，
+     然后从 Node 侧直接看落盘文件，确认原生真的写进去了。 */
+  function runSavePhase() {
+    win.webContents
+      .executeJavaScript(SAVE_BEFORE_RESTART, true)
+      .then(function (raw) {
+        const r = JSON.parse(raw);
+        chk("阶段2：走网页真实入口保存设置", r.ok === true, r.error || (r.steps || []).join(","));
+        chk("阶段2：localStorage 镜像已就绪（isLsReady）", r.lsReady === true, String(r.lsReady));
+        chk("阶段2：已模拟 iOS 的内存 localStorage 被清空", r.cleared === 0, "剩余 " + r.cleared + " 个键");
+
+        let store = {};
+        try { store = JSON.parse(fs.readFileSync(PERSIST_FILE, "utf8")); } catch (e) {}
+        chk("阶段2：沙盒 settings.json 里确实有这条模型（原生写入成功）",
+          typeof store.settings === "string" && store.settings.indexOf("probe_model_m6") >= 0,
+          (store.settings || "").length + " 字节");
+        const kv = store.kv || {};
+        chk("阶段2：小键值已镜像到原生",
+          typeof kv["__ls_mirror_souti_typo_user"] === "string",
+          String(kv["__ls_mirror_souti_typo_user"]));
+        chk("阶段2：题库数据键未被镜像", kv["__ls_mirror_wb_searchbank_v1"] === undefined);
+        chk("阶段2：设置键未被镜像", kv["__ls_mirror_wb_searchbank_settings"] === undefined);
+
+        // 模拟重启
+        consoleErrMark = consoleErrors.length;
+        win.webContents.reload();
+      })
+      .catch(function (err) {
+        chk("阶段2：保存与镜像执行成功", false, err && err.message);
+        finish();
+      });
+  }
 
   win.loadFile(INDEX);
 });

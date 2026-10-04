@@ -61,6 +61,45 @@ enum LocalStore {
         try? FileManager.default.copyItem(at: url, to: alias)
     }
 
+    // MARK: - 设置持久化（m6）
+
+    /// 设置文件：Documents/SearchBank/settings.json。
+    /// 与电脑版 <数据目录>/settings.json **同名同格式**，方便两边互相拷贝迁移。
+    ///
+    /// 为什么必须走文件：iOS 的 WKWebView 用 file:// 加载页面，这种"不透明来源"的
+    /// localStorage 只存在内存里，App 一关就没了。桥接原本把 writeSettings 实现成
+    /// "再写一份 localStorage"，等于写进了同一个临时抽屉 —— 用户看到的
+    /// "添加 AI 模型保存后，重启就没了" 就是这么来的。
+    static func settingsFileURL() -> URL {
+        return dataFileURL().deletingLastPathComponent()
+            .appendingPathComponent("settings.json")
+    }
+
+    /// 读取设置文件；不存在/损坏返回 nil（让前端走默认值）。
+    static func readSettings() -> String? {
+        let url = settingsFileURL()
+        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+        return try? String(contentsOf: url, encoding: .utf8)
+    }
+
+    /// 原子写入设置（写临时文件再 rename），与 data.json 同样的做法。
+    static func writeSettings(_ text: String) -> Bool {
+        let url = settingsFileURL()
+        let tmp = url.deletingLastPathComponent()
+            .appendingPathComponent("settings.json.tmp-\(UUID().uuidString)")
+        do {
+            try text.write(to: tmp, atomically: true, encoding: .utf8)
+            if FileManager.default.fileExists(atPath: url.path) {
+                _ = try? FileManager.default.removeItem(at: url)
+            }
+            try FileManager.default.moveItem(at: tmp, to: url)
+            return true
+        } catch {
+            try? FileManager.default.removeItem(at: tmp)
+            return false
+        }
+    }
+
     // MARK: - 待导入备份的暂存（v3.0.1）
 
     /// 用户从电脑导出的备份可能有 8MB，base64 后约 10.7MB。
