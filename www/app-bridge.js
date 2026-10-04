@@ -1650,6 +1650,22 @@
       "  .modal{max-width:94vw;max-height:82vh;overflow:auto;}",
       "  .mask{padding:12px;}",
       "  .ai-chat-win{right:8px !important;left:8px !important;bottom:calc(88px + var(--sab)) !important;width:auto !important;}",
+      // ---- 结果卡片版面（手机端）------------------------------------------
+      // 用户报「搜出来的题干看着别扭」：实测 342px 的卡片里，题干只分到 136px
+      // （≈9 个字宽就换行），而「相关度 15833%」那个胶囊独占 92px、
+      // 分类标签又占 28px。原因是 .qh 是 flex 行、题干那个 span 没设 flex，
+      // 中文又能任意断行 → 两个 nowrap 胶囊把它压成一条细柱。
+      // 改成 grid：题干独占主行（第 2 列跨到第 3 列），
+      // 分类与相关度落到第二行，再长也不会挤题干。
+      // （这是纯移动端版面问题 —— 桌面宽屏下原样没问题，所以只在这里覆盖。）
+      "  #searchResults .qcard{padding:12px 12px;}",
+      "  #searchResults .qcard .qh{display:grid;grid-template-columns:auto minmax(0,1fr) auto;column-gap:8px;row-gap:6px;align-items:baseline;}",
+      "  #searchResults .qcard .qh > .idx{grid-column:1;grid-row:1;}",
+      "  #searchResults .qcard .qh > span:not(.idx):not(.tag):not(.rel){grid-column:2 / 4;grid-row:1;min-width:0;}",
+      "  #searchResults .qcard .qh > .tag{grid-column:2;grid-row:2;justify-self:start;margin:0;}",
+      "  #searchResults .qcard .qh > .rel{grid-column:3;grid-row:2;justify-self:end;margin-left:0;}",
+      "  .qcard .qh{flex-wrap:wrap;}",
+      "  .qcard .qh > span:not(.idx):not(.tag):not(.rel){min-width:0;}",
       "}",
       ".sb-tablewrap{width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;margin:8px 0;}",
       "table{max-width:100%;}",
@@ -1660,12 +1676,7 @@
       ".tier-high .card{box-shadow:0 10px 30px rgba(15,23,42,.10);}",
       ".is-tablet .wrap{max-width:980px;margin:0 auto;}",
       "@media (prefers-reduced-motion: reduce){*{animation:none !important;transition:none !important;}}",
-      "img{max-width:100%;}",
-      ".sb-hist{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:10px;}",
-      ".sb-hist .sb-hchip{max-width:60vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:5px 11px;border:1px solid var(--line);border-radius:999px;background:var(--soft);font-size:13px;color:var(--sub);min-height:32px;display:inline-flex;align-items:center;}",
-      ".sb-hist .sb-hchip:active{background:var(--pri-bg);color:var(--pri-d);}",
-      ".sb-hist .sb-htitle{font-size:12px;color:var(--sub);margin-right:2px;}",
-      ".sb-hist .sb-hclr{font-size:12px;color:var(--sub);padding:5px 8px;border-radius:999px;border:1px dashed var(--line);min-height:32px;}"
+      "img{max-width:100%;}"
     ].join("\n");
 
     var style = document.createElement("style");
@@ -1683,76 +1694,18 @@
   }
 
   /* ==================================================================
-   * 11. 搜索历史（原手机版功能，保留）
+   * 11.（已移除）搜索历史
+   * ----------------------------------------------------------------
+   * 曾把「最近搜过」做成搜索页下方的一排胶囊（原手机版的功能）。
+   * v3.0.3 按用户要求删除：连搜几道题之后这排胶囊会占掉小半屏，
+   * 手机上本来垂直空间就紧张，搜索结果反而被挤下去了。
+   * 这里只保留一次性的残留清理 —— 老版本在 localStorage 里留过
+   * sb_search_hist，顺手删掉，不留垃圾。
    * ================================================================== */
-  var HIST_KEY = "sb_search_hist";
-
-  function histLoad() {
-    try { return JSON.parse(localStorage.getItem(HIST_KEY)) || []; } catch (e) { return []; }
-  }
-  function histPush(q) {
-    q = String(q || "").replace(/\s+/g, " ").trim();
-    if (q.length < 2) return;
-    var list = histLoad().filter(function (x) { return x !== q; });
-    list.unshift(q);
-    try { localStorage.setItem(HIST_KEY, JSON.stringify(list.slice(0, 12))); } catch (e) {}
-    histRender();
-  }
-  function escHtml(s) {
-    return String(s == null ? "" : s).replace(/[&<>]/g, function (c) {
-      return { "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c];
-    });
-  }
-  function histRender() {
-    var box = document.getElementById("searchOcrTip");
-    if (!box || !box.parentNode) return;
-    var host = document.getElementById("sbHistBar");
-    if (!host) {
-      host = document.createElement("div");
-      host.id = "sbHistBar";
-      host.className = "sb-hist";
-      box.parentNode.insertBefore(host, box.nextSibling);
-    }
-    var list = histLoad();
-    if (!list.length) { host.innerHTML = ""; host.style.display = "none"; return; }
-    host.style.display = "";
-    var html = '<span class="sb-htitle">最近搜过</span>';
-    list.slice(0, 8).forEach(function (q, i) {
-      html += '<button class="sb-hchip" data-i="' + i + '">' + escHtml(q) + "</button>";
-    });
-    html += '<button class="sb-hclr" id="sbHistClear">清空</button>';
-    host.innerHTML = html;
-    Array.prototype.forEach.call(host.querySelectorAll(".sb-hchip"), function (b) {
-      b.addEventListener("click", function () {
-        var q = histLoad()[+b.dataset.i];
-        if (!q) return;
-        if (isFn("setSearchText")) window.setSearchText(q);
-        if (isFn("doSearch")) window.doSearch();
-      });
-    });
-    var c = document.getElementById("sbHistClear");
-    if (c) c.addEventListener("click", function () {
-      try { localStorage.removeItem(HIST_KEY); } catch (e) {}
-      histRender();
-    });
-  }
-  function hookSearchHistory() {
-    if (!isFn("doSearch")) return;
-    var orig = window.doSearch;
-    window.doSearch = function () {
-      var q = "";
-      try {
-        if (isFn("readSearchText")) q = window.readSearchText();
-        else {
-          var el = document.getElementById("searchInput");
-          q = el ? el.value : "";
-        }
-      } catch (e) {}
-      var r = orig.apply(this, arguments);
-      try { histPush(q); } catch (e) {}
-      return r;
-    };
-    histRender();
+  function dropOldSearchHistory() {
+    try { localStorage.removeItem("sb_search_hist"); } catch (e) {}
+    var bar = document.getElementById("sbHistBar");
+    if (bar && bar.parentNode) bar.parentNode.removeChild(bar);
   }
 
   /* ==================================================================
@@ -1941,7 +1894,7 @@
     patchImport();
     patchOcrImage();
     patchFolderUI();
-    hookSearchHistory();
+    dropOldSearchHistory();
     hookSearchTime();      // 记录「最近一次真正搜过的文字」，用于剪贴板两条通路去重
 
     // 手机端的两条主线：AI 优先 + 整页净化

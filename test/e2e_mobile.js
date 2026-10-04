@@ -57,6 +57,9 @@ const PAGE_TESTS = `
   }
 
   // ---------- 1. 桥接对象 ----------
+  // 整段包一层 try/catch：chks 是最后统一 return 的，中途抛错会把已有结果全丢掉，
+  // 只留一句 Electon 的 "Script failed to execute"。这里把真实错误带回去。
+  try {
   ["fsBridge","umiBridge","aiBridge","batchBridge","wpsBridge","Tesseract"].forEach(function(n){
     chk("桥接对象 window." + n + " 存在", window[n] && typeof window[n] === "object");
   });
@@ -227,8 +230,12 @@ const PAGE_TESTS = `
   chk("图片识别页提示已改成 AI 优先说明",
     hint && hint.textContent.indexOf("AI 优先") >= 0);
 
-  // ---------- 9. 搜索历史条 ----------
-  chk("搜索历史容器已建立 #sbHistBar", !!document.getElementById("sbHistBar"));
+  // ---------- 9. 搜索历史条（v3.0.3 按用户要求移除）----------
+  // 连搜几道题后那排「最近搜过」胶囊会占掉小半屏，把搜索结果挤下去。
+  chk("「最近搜过」已移除（不再注入 #sbHistBar）", !document.getElementById("sbHistBar"));
+  chk("残留的 localStorage 键已清掉",
+    localStorage.getItem("sb_search_hist") === null,
+    localStorage.getItem("sb_search_hist"));
 
   // ---------- 10. 移动端样式 ----------
   chk("iOS 补充样式已注入 #sb-ios-style", !!document.getElementById("sb-ios-style"));
@@ -509,12 +516,125 @@ const PAGE_TESTS = `
     (DATA.banks || []).some(function (b) { return b.id === "bk-seed"; }));
   chk("数据就绪闸门已打开", window.__SB.__test.isDataReady() === true);
 
+  // ---------- 15. 结果卡片版面（题干曾被挤成一条细柱）----------
+  // 实测（430 宽）：修前题干只分到 136px（≈9 字/行），
+  // 因为 .qh 是 flex 行、「相关度」胶囊 nowrap 独占 92px 把题干压窄。
+  // 现在改成 grid：题干独占主行，标签/相关度落第二行。
+  try {
+    const probe = {
+      id: "probe_layout_" + Date.now(),
+      q: "带式输送机输送带入井前应经过什么试验？这是一道用来测版面的长题干，故意写长一点看它怎么换行。",
+      a: "B", opts: [{ label: "A", text: "强度试验" }, { label: "B", text: "阻燃试验" }],
+      type: "单选题", cat: "第一部分", bankId: (DATA.items[0] && DATA.items[0].bankId) || "default",
+      note: "", src: "测试", createdAt: Date.now()
+    };
+    DATA.items.unshift(probe);
+    go("search");
+    setSearchText("带式输送机输送带入井前应经过什么试验");
+    doSearch();
+    await new Promise(function (r) { setTimeout(r, 1500); });
+
+    const card = document.querySelector("#searchResults .qcard");
+    chk("搜索结果渲染出卡片", !!card, card ? "有" : "没有（题库里可能没有匹配项）");
+    if (card) {
+      const qh = card.querySelector(".qh");
+      const stem = qh && qh.children[1];
+      const cardW = card.getBoundingClientRect().width;
+      const stemW = stem ? stem.getBoundingClientRect().width : 0;
+      chk(".qh 已改为 grid 版面（题干不再被 flex 挤压）",
+        !!qh && getComputedStyle(qh).display === "grid",
+        qh ? getComputedStyle(qh).display : "无 .qh");
+      chk("题干宽度占卡片 ≥70%（修前约 40%）",
+        stemW >= cardW * 0.7,
+        Math.round(stemW) + "px / 卡片 " + Math.round(cardW) + "px = " +
+        (cardW ? (stemW / cardW * 100).toFixed(0) : 0) + "%");
+      const rel = qh && qh.querySelector(".rel");
+      if (rel && stem) {
+        chk("相关度胶囊已换到第二行（纵向在题干之下）",
+          rel.getBoundingClientRect().top >= stem.getBoundingClientRect().bottom - 2,
+          "题干底=" + Math.round(stem.getBoundingClientRect().bottom) +
+          " 相关度顶=" + Math.round(rel.getBoundingClientRect().top));
+      }
+    }
+    const k = DATA.items.indexOf(probe);
+    if (k >= 0) DATA.items.splice(k, 1);
+    setSearchText("");
+    doSearch();
+    await new Promise(function (r) { setTimeout(r, 300); });
+  } catch (e) {
+    chk("第 15 节（结果卡片版面）执行成功", false, (e && e.message) || String(e));
+  }
+
+  // ---------- 16. 输入清洗 + 选项识别（v1.0.62 共享逻辑，用户实测那道题）----------
+  try {
+    // 用户截图里的真实识别文字（题干+选项都识别到了，只是混进了库名/进度/分值）。
+    // 注意段内必须写双反斜杠换行转义：本段处在模板字符串里，
+    // 单反斜杠会被模板字符串先解释成真实换行，落进字符串字面量就是语法错误。
+    const RAW_OCR = "2026版《煤矿重大事故隐患判定标准》\\n（… 3/20\\n（1.0分）带式输送机输送带入井前应经过什么试验？\\n"
+      + "A 强度试验\\nB 阻燃试验\\nC 耐磨试验\\nD 防水试验";
+
+    chk("页面提供了 cleanQueryText", typeof cleanQueryText === "function");
+    const cleaned = cleanQueryText(RAW_OCR);
+    chk("库名/进度/分值 被清掉（3 处）", cleaned.dropped === 3, cleaned.dropped);
+    chk("清洗后不再含题库名", cleaned.text.indexOf("煤矿重大事故隐患判定标准") < 0, cleaned.text);
+    chk("清洗后不再含进度碎片「3/20」", cleaned.text.indexOf("3/20") < 0);
+    chk("清洗后不再含分值「1.0分」", cleaned.text.indexOf("1.0分") < 0);
+    chk("题干本体完整保留",
+      cleaned.text.indexOf("带式输送机输送带入井前应经过什么试验？") >= 0);
+    chk("选项完整保留", cleaned.text.indexOf("A 强度试验") >= 0 && cleaned.text.indexOf("D 防水试验") >= 0);
+
+    // 「A 强度试验」这种丢掉分隔符的写法必须认成选项
+    chk("「A 强度试验」判为选项 opt", qLineKind("A 强度试验") === "opt", qLineKind("A 强度试验"));
+    chk("「（… 3/20」判为界面碎片 meta", qLineKind("（… 3/20") === "meta", qLineKind("（… 3/20"));
+    // 反向：不能把真题干误吞
+    chk("「A 类火灾是指固体物质火灾。」不被误判为选项",
+      qLineKind("A 类火灾是指固体物质火灾。") !== "opt", qLineKind("A 类火灾是指固体物质火灾。"));
+    chk("含挖空的真题干不被当成库名行",
+      cleanQueryText("根据《煤矿安全规程》的规定，下列说法正确的是（）").dropped === 0);
+
+    // 识别自检：修前「选项 ✗（读到 0 个）」，修后应数出 A/B/C/D
+    const gate = ocrGate(RAW_OCR);
+    chk("识别自检数出 4 个选项", gate.optCount === 4, gate.optCount);
+    chk("识别自检标号连续 A/B/C/D",
+      gate.optLabels.join("/") === "A/B/C/D" && !gate.optGap,
+      gate.optLabels.join("/") + (gate.optGap ? "（不连续）" : ""));
+  } catch (e) {
+    chk("第 16 节（输入清洗 + 选项识别）执行成功", false, (e && e.message) || String(e));
+  }
+
+  } catch (fatal) {
+    // 这里同样要写双反斜杠（见上面 RAW_OCR 的说明）
+    chk("页面测试脚本未中途抛错", false,
+      ((fatal && (fatal.stack || fatal.message)) || String(fatal)).split("\\n").slice(0, 4).join(" ⏎ "));
+  }
+
   return { rows: R, errors: window.__PAGE_ERRORS || [] };
 })();
 `;
 
 /* ---------------- 主流程 ---------------- */
 let desktopFnCount = 0;
+
+/* PAGE_TESTS 是模板字符串，里面必须写双反斜杠转义（\\n / \\d）。
+   写单反斜杠会被模板字符串先解释成真实换行/字符，落到页面里就是
+   "Uncaught SyntaxError: Invalid or unexpected token" —— 而 Electron 只会
+   回一句 "Script failed to execute"，非常难查（踩过一次）。
+   所以开窗口之前先在 Node 侧把页面脚本编译一遍，出错直接说清哪一行。 */
+(function guardPageTestsSyntax() {
+  try {
+    new Function(PAGE_TESTS);
+  } catch (e) {
+    console.error("\n✗ PAGE_TESTS 页面侧脚本语法错误：" + ((e && e.message) || e));
+    const m = /(\d+):(\d+)/.exec(String((e && e.stack) || ""));
+    if (m) {
+      const ln = parseInt(m[2], 10);
+      PAGE_TESTS.split("\n").slice(Math.max(0, ln - 3), ln + 2)
+        .forEach(function (l, i) { console.error("   " + (ln - 2 + i) + "  " + l); });
+    }
+    console.error("  提示：模板字符串里 \n 要写成 \\n，\\d 要写成 \\\\d\n");
+    process.exit(1);
+  }
+})();
 
 app.whenReady().then(function () {
   desktopFnCount = staticCheck();

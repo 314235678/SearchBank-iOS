@@ -772,7 +772,7 @@
 <div class="mask" id="setMask">
   <div class="modal">
     <h3>设置</h3>
-    <div class="muted" style="margin:-4px 0 10px;font-size:13px;">当前版本 <b>v1.0.61</b> <span style="display:inline-block;padding:1px 8px;border-radius:8px;background:#eaf1ff;color:#1d4ed8;font-size:12px;font-weight:600;margin-left:2px;">手机版 · iOS m3</span>（新增：<b>图片识别页全面升级</b> —— 支持直接 Ctrl+V 粘贴、一键截屏识别、OCR 结果按坐标重排成正确阅读顺序、低置信度字标出来、选项/答案读到没做质量自检、可一键「用 AI 精读」或「AI 核对错字」、识别历史留痕；同时修掉 OCR.space 分支"压缩了却仍传原图"的老问题）</div>
+    <div class="muted" style="margin:-4px 0 10px;font-size:13px;">当前版本 <b>v1.0.62</b> <span style="display:inline-block;padding:1px 8px;border-radius:8px;background:#eaf1ff;color:#1d4ed8;font-size:12px;font-weight:600;margin-left:2px;">手机版 · iOS m4</span>（新增：<b>粘贴/识别的题干更干净，搜得准</b> —— 自动忽略考试界面自带的题库名、进度（… 3/20）与分值（1.0分）这些碎片，它们以前会被压成 "320"、"10分" 混进检索把正确题挤下去；同时修掉「A 强度试验」这种丢掉分隔符的选项认不出来、反而污染题干的老问题）</div>
     <div class="card" style="border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:14px;">
       <div style="font-weight:600;margin-bottom:6px;">本地文件夹保存（防浏览器清理）</div>
       <div id="folderStatus" class="muted" style="margin-bottom:8px;font-weight:400;"></div>
@@ -1445,6 +1445,56 @@ function chunkQuery(q){
    安全设计：只有确实切出 ≥2 段时才走新路径；单段输入（正常只粘题干）
    跑的仍是与 v1.0.58 一字不差的老路径。设置里可整体关闭。
    ============================================================ */
+/* ============================================================
+   v1.0.62 — A1 输入清洗加强：清掉考试界面自带的碎片
+   ------------------------------------------------------------
+   用户实测：一道「带式输送机输送带入井前应经过什么试验？」，
+   从考试 App 截图识别出来长这样 ——
+       2026版《煤矿重大事故隐患判定标准》
+       （… 3/20
+       （1.0分）带式输送机输送带入井前应经过什么试验？
+   结果正确那道题被顶到第 5 位，前 4 名全是无关题。
+
+   原因：norm() 会去掉所有标点，于是
+       「（… 3/20」  → "320"
+       「（1.0分）」  → "10分"
+   变成一堆无意义 token 混进查询；而库名又拼出一串长特征，
+   把真正题干的权重稀释掉。所以必须在 norm() **之前**清掉。
+
+   两条原则：① 只删"确定是界面元素"的片段，判不准就原样保留；
+             ② 清完若剩不下有效内容，就退回原文，绝不把查询清空。
+   ============================================================ */
+/* 整行只是「年份/版本 + 书名号标题」，没有任何题干特征 → 库名/卷名行 */
+function isBankTitleLine(line){
+  const s=String(line==null?"":line).trim();
+  if(!s||s.length>34)return false;
+  if(!/《[^》]{2,}》/.test(s))return false;
+  if(/[（(]\s*[）)]|＿|_{2,}|[？?]/.test(s))return false;   // 有挖空/疑问 → 是题干，别动
+  if(/(下列|以下|应当|必须|属于|正确|错误|哪些|什么|哪一|如何|是指|的说法|的规定)/.test(s))return false;
+  const rest=s.replace(/《[^》]*》/g,"").replace(/\d{4}\s*版?/g,"")
+              .replace(/[\s\-—－·、,，.。:：]/g,"");
+  return rest.length<=6;
+}
+/* 清掉界面碎片。返回 {text, dropped}；判不准一律保留。 */
+function cleanQueryText(text){
+  const before=String(text==null?"":text).replace(/\r\n?/g,"\n");
+  let t=before,dropped=0;
+  // ① 分值碎片：（1.0分）/ (2 分) / 【1分】
+  t=t.replace(/[（(【\[]\s*\d+(?:\.\d+)?\s*分\s*[)）】\]]/g,()=>{dropped++;return " ";});
+  // ② 进度碎片：（… 3/20  /  …… 3/20
+  t=t.replace(/[（(【\[]?\s*[.．…·]{1,6}\s*\d{1,3}\s*[\/／]\s*\d{1,3}/g,()=>{dropped++;return " ";});
+  // ③ 库名/卷名行（全部行都是标题时不动，避免把查询清空）
+  const lines=t.split("\n");
+  const nonEmpty=lines.filter(s=>s.trim()).length;
+  if(lines.filter(isBankTitleLine).length<nonEmpty){
+    t=lines.map(s=>isBankTitleLine(s)?(dropped++,""):s).join("\n");
+  }
+  // ④ 收拾残局：压空格、去掉因此产生的空行
+  t=t.split("\n").map(s=>s.replace(/[ \t\u3000]{2,}/g," ").trim()).filter(Boolean).join("\n");
+  // 兜底：清没了就退回原文（宁可脏，也不能把用户输入清掉）
+  if(norm(t).length<4)return {text:before,dropped:0};
+  return {text:t,dropped:dropped};
+}
 /* 一行属于什么类型：stem 题干 / opt 选项 / ans 答案行 / meta 页码与界面词 / skip 空行 */
 function qLineKind(line){
   const s=String(line==null?"":line).trim();
@@ -1454,6 +1504,8 @@ function qLineKind(line){
   if(/^\d{1,3}\s*[\/／]\s*\d{1,3}$/.test(s))return "meta";
   if(/^第\s*\d{1,4}\s*[题页]\s*$/.test(s))return "meta";
   if(/^\d{1,4}\s*[.、．]?$/.test(s))return "meta";
+  // v1.0.62 进度碎片（OCR 把库名与进度并成一行）：（… 3/20  /  ··· 3/20
+  if(s.length<=16&&/^[（(【\[]?\s*[.．…·]{1,6}\s*\d{1,3}\s*[\/／]\s*\d{1,3}\s*[)）】\]]?$/.test(s))return "meta";
   // 题型标记行：【单选题】、（多选题）
   if(/^[【\[（(]\s*(单选题|多选题|判断题|填空题|简答题|不定项选择题|材料题|案例分析题)\s*[】\]）)]$/.test(s))return "meta";
   // 界面按钮词（可能连写、也可能空格分隔）
@@ -1463,6 +1515,15 @@ function qLineKind(line){
   // 选项行：A. xxx / A、xxx / (A) xxx / A）xxx / ①．xxx
   if(/^[（(\[]?\s*[A-Ha-h]\s*[）)\]．.、,，:：]\s*\S/.test(s))return "opt";
   if(/^[①②③④⑤⑥]\s*[.、．)）:：]\s*\S/.test(s))return "opt";
+  // v1.0.62 选项行（字母 + 空格）：OCR 常把「A. 强度试验」的分隔符丢掉，
+  // 变成「A 强度试验」。旧正则要求必须有分隔符 → 这类选项全被当成题干，
+  // 既让「识别自检」报"选项 0 个"，又把选项文字混进题干污染检索。
+  // 收紧着补上：只认 A-H 开头、内容短、且不含句末标点（避免误吞
+  //「A 类火灾是指固体物质火灾。」这种真题干）。
+  if(/^[A-Ha-h][ \t\u3000]+\S/.test(s)){
+    const rest=s.replace(/^[A-Ha-h][ \t\u3000]+/,"").trim();
+    if(rest.length<=30&&!/[。？?！!；;]/.test(rest))return "opt";
+  }
   return "stem";
 }
 /* 把粘贴的整段文字切成"疑似题组"。只做高精度切分 —— 判不准就不切，
@@ -1543,7 +1604,21 @@ let _searchToken=0; // 用于取消过期搜索请求
 function doSearch(){
   /* v1.0.60：走 readSearchText 而不是 input.value —— 后者会把 \n 删掉，
      多行文本必须靠 \u2028 还原成换行，分段搜才有行结构可用 */
-  const raw=readSearchText().trim();
+  const rawAll=readSearchText().trim();
+  /* v1.0.62：先清掉考试界面碎片（库名 / 进度 / 分值）再进检索链路。
+     必须赶在 norm() 之前 —— norm 会把「（… 3/20」压成 "320"、
+     「（1.0分）」压成 "10分"，这些 token 会去乱匹配，把正确题挤下去。
+     实测：用户那道「带式输送机输送带入井前应经过什么试验」，
+     带碎片时排第 5、前 4 名全无关；清掉后回到第 1。 */
+  const cleaned=cleanQueryText(rawAll);
+  const raw=cleaned.text.trim();
+  if(cleaned.dropped){
+    const tip=$("#searchOcrTip");
+    if(tip){
+      tip.style.display="";tip.style.color="";
+      tip.innerHTML="已自动忽略 "+cleaned.dropped+" 处界面文字（题库名 / 进度 / 分值）";
+    }
+  }
   const q=norm(raw);
   const cf=$("#catFilter").value;
   const tf=$("#typeFilter")?$("#typeFilter").value:"";
@@ -6353,7 +6428,10 @@ function ocrGate(text){
   lines.forEach(l=>{
     const k=(typeof qLineKind==="function")?qLineKind(l):"stem";
     if(k==="opt"){
-      const m=/^[（(\[]?\s*([A-Fa-f])\s*[）)\].、．:：]/.exec(l);
+      // v1.0.62：标号提取原来也要求「字母后必须是分隔符」，于是
+      // OCR 丢分隔符后的「A 强度试验」即使被判成 opt，标号仍取不到、
+      // 自检照样报"选项 0 个"。这里把「空格」也算作合法分隔。
+      const m=/^[（(\[]?\s*([A-Ha-h])\s*(?:[）)\].、．,，:：]|[ \t\u3000])/.exec(l);
       if(m)labels[m[1].toUpperCase()]=1;
     }else if(k==="ans"){ans++;}
     else if(k==="stem"){stem+=l.replace(/[^\u4e00-\u9fa5]/g,"").length;}
