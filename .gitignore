@@ -12,3 +12,10 @@ SearchBank.ipa
 # 本地敏感/临时文件
 monitor_build.sh
 *.zip
+
+# 本地版本备份（换版前留档用，不进仓库；www/ 是 folder reference，
+# 放在里面的备份会被整包打进 IPA，故统一收进 _bak_*/）
+_bak_*/
+*.v2bak
+*.v3bak
+*.bak_*

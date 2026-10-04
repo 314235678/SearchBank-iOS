@@ -170,10 +170,28 @@ class ViewController: UIViewController,
         switch type {
         case "ocr":
             handleOCR(id: id, payload: payload)
+        // v3.0：带坐标+置信度的离线 OCR（网页的"按坐标重排/低分块标黄"要用）
+        case "ocrBlocks":
+            handleOCRBlocks(id: id, payload: payload)
         case "pickFiles":
             handlePickFiles(id: id)
         case "shareExport":
             handleShareExport(id: id, payload: payload)
+        // v3.0：二进制导出（试卷 docx）走系统分享
+        case "shareBinary":
+            handleShareBinary(id: id, payload: payload)
+        // v3.0：在 Safari 里打开外链（网页的 aiBridge.openExternal）
+        case "openExternal":
+            handleOpenExternal(id: id, payload: payload)
+        // v3.0：AI 通道（原生 URLSession，绕开 CORS）
+        case "aiAsk":
+            handleAIAsk(id: id, payload: payload)
+        case "aiChat":
+            handleAIChat(id: id, payload: payload)
+        case "aiProof":
+            handleAIProof(id: id, payload: payload)
+        case "aiRecognize":
+            handleAIRecognize(id: id, payload: payload)
         case "getBundledBank":
             handleBundledBank(id: id)
         case "loadData":
@@ -271,6 +289,108 @@ class ViewController: UIViewController,
                              splitRegions: split,
                              multicand: multicand) { text in
             self.respond(id: id, result: ["text": text ?? ""])
+        }
+    }
+
+    // MARK: - 带坐标的离线 OCR（v3.0）
+
+    /// 与 handleOCR 走同一套预处理，但把每个文本块的**坐标与置信度**一起带回去。
+    /// 网页 v1.0.61 的「按坐标重排成阅读顺序」「低置信度标黄」「自动定位题目区」
+    /// 全靠这份数据；纯文本是做不到这些的。
+    private func handleOCRBlocks(id: String, payload: [String: Any]) {
+        guard let b64 = payload["base64"] as? String else {
+            respond(id: id, result: ["error": "缺少 base64"])
+            return
+        }
+        let defaults = UserDefaults.standard
+        let whiten = defaults.object(forKey: "sb_ocr_whiten_red") as? Bool ?? true
+        let maxEdge = defaults.object(forKey: "sb_ocr_max_edge") as? Int ?? 1600
+        let enhance = defaults.object(forKey: "sb_ocr_enhance") as? Bool ?? true
+
+        OfflineOCR.recognizeBlocks(base64: b64,
+                                   cropHeaderPct: 0.05,
+                                   cropFooterPct: 0.04,
+                                   whitenRedBg: whiten,
+                                   maxEdge: maxEdge,
+                                   enhance: enhance) { res in
+            guard let res = res else {
+                self.respond(id: id, result: ["error": "识别失败（图片无法解析或 Vision 报错）"])
+                return
+            }
+            self.respond(id: id, result: res)
+        }
+    }
+
+    // MARK: - 二进制导出分享（v3.0：试卷 docx）
+
+    private func handleShareBinary(id: String, payload: [String: Any]) {
+        guard let b64 = payload["base64"] as? String,
+              let name = payload["filename"] as? String,
+              let data = Data(base64Encoded: b64, options: .ignoreUnknownCharacters) else {
+            respond(id: id, result: ["error": "缺少导出内容"])
+            return
+        }
+        // 文件名兜底：临时目录里不能出现路径分隔符
+        let safeName = name.replacingOccurrences(of: "/", with: "_")
+        let tmp = FileManager.default.temporaryDirectory.appendingPathComponent(safeName)
+        do {
+            try data.write(to: tmp)
+        } catch {
+            respond(id: id, result: ["error": "写入临时文件失败"])
+            return
+        }
+        let av = UIActivityViewController(activityItems: [tmp], applicationActivities: nil)
+        av.modalPresentationStyle = .formSheet
+        if let pop = av.popoverPresentationController {
+            pop.sourceView = view
+            pop.sourceRect = CGRect(x: view.bounds.midX, y: view.bounds.midY, width: 0, height: 0)
+        }
+        present(av, animated: true) {
+            self.respond(id: id, result: ["ok": true])
+        }
+    }
+
+    // MARK: - 打开外链（v3.0）
+
+    private func handleOpenExternal(id: String, payload: [String: Any]) {
+        guard let s = payload["url"] as? String,
+              let url = URL(string: s),
+              let scheme = url.scheme?.lowercased(),
+              scheme == "http" || scheme == "https" else {
+            respond(id: id, result: ["error": "非法链接"])
+            return
+        }
+        UIApplication.shared.open(url, options: [:]) { ok in
+            self.respond(id: id, result: ok ? ["ok": true] : ["error": "无法打开链接"])
+        }
+    }
+
+    // MARK: - AI 通道（v3.0）
+    // 放在原生侧跑的原因：WKWebView 用 file:// 加载页面，Origin 为 null，
+    // 绝大多数模型服务端会因 CORS 直接拒绝；而且 API Key 留在沙盒里更安全。
+    // 注意：URLSession 回调在后台线程，回传 JS 前必须切回主线程。
+
+    private func handleAIAsk(id: String, payload: [String: Any]) {
+        AIBridge.handleAsk(payload) { r in
+            DispatchQueue.main.async { self.respond(id: id, result: r) }
+        }
+    }
+
+    private func handleAIChat(id: String, payload: [String: Any]) {
+        AIBridge.handleChat(payload) { r in
+            DispatchQueue.main.async { self.respond(id: id, result: r) }
+        }
+    }
+
+    private func handleAIProof(id: String, payload: [String: Any]) {
+        AIBridge.handleProof(payload) { r in
+            DispatchQueue.main.async { self.respond(id: id, result: r) }
+        }
+    }
+
+    private func handleAIRecognize(id: String, payload: [String: Any]) {
+        AIBridge.handleRecognize(payload) { r in
+            DispatchQueue.main.async { self.respond(id: id, result: r) }
         }
     }
 

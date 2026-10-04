@@ -109,6 +109,135 @@ enum OfflineOCR {
         }
     }
 
+    /// 【v3.0 新增】带坐标与置信度的离线识别。
+    ///
+    /// 为什么要单独开一个：网页 v1.0.61 的「按识别坐标重排成正确阅读顺序」
+    /// 和「低置信度字标黄」都依赖每个文本块的 box 与 score —— 而 Vision
+    /// 本身就能给出 boundingBox 与 confidence，只是以前 `recognize` 只往外
+    /// 吐纯文本，白白丢掉了。
+    ///
+    /// 返回结构与 Umi-OCR 的 `data[]` 完全一致，于是网页侧同一套
+    /// `sortOcrBlocks()` / `ocrRowsToText()` 不用改一行就能跑：
+    ///   { "w": 1179, "h": 2556,
+    ///     "blocks": [ { "text": "...", "score": 0.87,
+    ///                   "box": [[x0,y0],[x1,y0],[x1,y1],[x0,y1]] } ] }
+    /// box 用**处理后图片的像素坐标、原点在左上角**（Umi 也是这个口径），
+    /// 网页里 `it.x - prevEnd > 60` 那个"补空格"的阈值才成立。
+    /// w/h 是处理后的图幅 —— 桥接层要靠它判断哪些行"贴着屏幕上下边缘"（状态栏/小白条）。
+    static func recognizeBlocks(base64: String,
+                                cropHeaderPct: Double = 0.05,
+                                cropFooterPct: Double = 0.04,
+                                whitenRedBg: Bool = true,
+                                maxEdge: Int = 1600,
+                                enhance: Bool = true,
+                                completion: @escaping ([String: Any]?) -> Void) {
+
+        var raw = base64
+        if let range = raw.range(of: ";base64,") {
+            raw = String(raw[range.upperBound...])
+        }
+        guard let data = Data(base64Encoded: raw, options: .ignoreUnknownCharacters),
+              let image = UIImage(data: data),
+              let cgImage = image.cgImage else {
+            completion(nil)
+            return
+        }
+
+        // 与 recognize() 保持完全相同的预处理链路，保证两条路径识别结果一致
+        var working: CGImage = cgImage
+
+        /* 记录「处理后坐标 → 原图坐标」的映射参数。
+           桥接层要拿它把「题目区包围盒」映射回**原图**去裁剪，再把裁好的小图
+           发给 AI 精读 —— 少了这三个数，手机上那种整屏截图裁出来就是错位的。 */
+        let origW = cgImage.width
+        let origH = cgImage.height
+        var scaleToOrig = 1.0
+        var cropTopPx = 0
+        var cropBottomPx = 0
+
+        if maxEdge > 0 {
+            let longerSide = max(working.width, working.height)
+            if longerSide > maxEdge {
+                let scale = Double(maxEdge) / Double(longerSide)
+                let newW = max(1, Int(Double(working.width) * scale))
+                let newH = max(1, Int(Double(working.height) * scale))
+                if let scaled = resize(cgImage: working, width: newW, height: newH) {
+                    working = scaled
+                    scaleToOrig = Double(newW) / Double(origW)
+                }
+            }
+        }
+        if whitenRedBg, let whitened = whitenRedBackground(cgImage: working) {
+            working = whitened
+        }
+        if enhance {
+            if let enhanced = enhanceForOCR(cgImage: working) { working = enhanced }
+            if let binary = otsuBinarize(cgImage: working) { working = binary }
+        }
+        if cropHeaderPct > 0 || cropFooterPct > 0 {
+            // crop() 内部按传入图的高度算偏移：top = Int(h*topPct)。
+            // 这里用同一套算式把偏移量记下来，供桥接层换算回原图坐标。
+            let topPct = max(0, min(0.4, cropHeaderPct))
+            let botPct = max(0, min(0.4, cropFooterPct))
+            if let cropped = crop(cgImage: working, topPct: topPct, bottomPct: botPct) {
+                cropTopPx = Int(Double(working.height) * topPct)
+                cropBottomPx = Int(Double(working.height) * botPct)
+                working = cropped
+            }
+        }
+
+        let imgW = working.width
+        let imgH = working.height
+        let W = Double(imgW)
+        let H = Double(imgH)
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            let request = VNRecognizeTextRequest()
+            request.recognitionLanguages = ["zh-Hans", "zh-Hant", "en"]
+            request.usesLanguageCorrection = true
+            if #available(iOS 14.0, *) {
+                request.recognitionLevel = .accurate
+            }
+            request.minimumTextHeight = 0.008
+
+            let handler = VNImageRequestHandler(cgImage: working, options: [:])
+            var blocks: [[String: Any]] = []
+            do {
+                try handler.perform([request])
+                for obs in (request.results ?? []) {
+                    guard let cand = obs.topCandidates(1).first else { continue }
+                    let text = cand.string
+                    if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { continue }
+
+                    let bb = obs.boundingBox
+                    // Vision 的 y 轴自下而上，转成左上角原点
+                    let x0 = Double(bb.minX) * W
+                    let x1 = Double(bb.maxX) * W
+                    let y0 = (1.0 - Double(bb.maxY)) * H
+                    let y1 = (1.0 - Double(bb.minY)) * H
+
+                    blocks.append([
+                        "text": text,
+                        "score": Double(cand.confidence),
+                        "box": [[x0, y0], [x1, y0], [x1, y1], [x0, y1]]
+                    ])
+                }
+            } catch {
+                completion(nil)
+                return
+            }
+            completion([
+                "blocks": blocks,
+                "w": imgW, "h": imgH,
+                // 坐标映射：原图坐标 = (处理后坐标 + 顶部裁掉的像素) / 缩放比
+                "scale": scaleToOrig,
+                "cropTop": cropTopPx,
+                "cropBottom": cropBottomPx,
+                "ow": origW, "oh": origH
+            ])
+        }
+    }
+
     /// 对单张 CGImage 跑 Vision OCR，返回 (文本, y 坐标) 列表。
     /// multicand=true 时每个观察输出 top1|top2|top3（置信度降序，JS 端可做多候选搜索）
     private static func recognizeRegion(cgImage: CGImage, multicand: Bool) -> [(text: String, y: CGFloat)]? {
