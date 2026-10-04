@@ -21,6 +21,7 @@ _bak_*/
 *.bak_*
 
 # 本地临时文件（提交信息草稿、推送/抓包日志）
+_cmsg*.txt
 _commitmsg*.txt
 _push.log
 _trace.log
