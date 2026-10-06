@@ -1814,8 +1814,11 @@
         // 旧版还有这两个别名：截屏后在相册里取最新一张来识别
         if (path === "shot" || path === "ocr-latest") {
           if (isFn("go")) window.go("ocr");
+          // m7：标记这次 OCR 来自「快捷指令截图」，命中开关则识别达标后自动搜题
+          window.__SB.__shortcutOcr = true;
           return window.__SB.pickLatestPhoto().then(function (x) {
-            if (x) whenDataReady(function () { ocrDataURL(x); });
+            if (!x) { window.__SB.__shortcutOcr = false; return; }  // 取消选取 → 不算快捷指令，避免污染后续手动识别
+            whenDataReady(function () { ocrDataURL(x); });
           });
         }
         if (path === "search") { whenDataReady(function () { swapToSearch(qs.q || ""); }); return; }

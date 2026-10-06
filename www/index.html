@@ -772,7 +772,7 @@
 <div class="mask" id="setMask">
   <div class="modal">
     <h3>设置</h3>
-    <div class="muted" style="margin:-4px 0 10px;font-size:13px;">当前版本 <b>v1.0.63</b> <span style="display:inline-block;padding:1px 8px;border-radius:8px;background:#eaf1ff;color:#1d4ed8;font-size:12px;font-weight:600;margin-left:2px;">手机版 · iOS m6</span>（修复：<b>题干是套话时按选项整题比对</b> —— 「下列叙述中错误的是（）」这类题干全库重复上千次、本身没有区分度，以前只给选项 0.5 的权重（＝1 分/块），于是"只是同提到某个词"的题靠题干相似度拿 20~40 分/块被顶到前面；现在四个选项逐字全中即认定为同一道题，直接排最前）</div>
+    <div class="muted" style="margin:-4px 0 10px;font-size:13px;">当前版本 <b>v1.0.64</b> <span style="display:inline-block;padding:1px 8px;border-radius:8px;background:#eaf1ff;color:#1d4ed8;font-size:12px;font-weight:600;margin-left:2px;">手机版 · iOS m7</span>（新增：<b>快捷指令截图后「AI 精读 → 自动搜题」</b> —— 设置里「图片识别」新增开关「截图识别达标后自动搜题」（默认开）：用快捷指令截屏搜题时，本机识别达标（题干≥8字且读到≥2个选项）会先跑 AI 精读、再自动搜题，全程不用点；关闭则回到现在这样需手动点「识别并搜题」）</div>
     <div class="card" style="border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:14px;">
       <div style="font-weight:600;margin-bottom:6px;">本地文件夹保存（防浏览器清理）</div>
       <div id="folderStatus" class="muted" style="margin-bottom:8px;font-weight:400;"></div>
@@ -850,6 +850,13 @@
         <span>按坐标重排 OCR 结果（推荐）<br>
         <span class="muted">Umi-OCR 返回的文字块顺序与阅读顺序并不一致（42 份真实样本里 41 份是乱的），同一行的碎块还会被当成好几行。打开后按它在截图里的实际位置重排、并把同一行拼回一行 —— 实测 826 个文本块拼成 468 行，消掉 358 个多余换行。若你觉得识别文字的顺序反而变差了，关掉它就退回引擎给的原始顺序。</span></span>
       </label>
+      <div id="setOcrAutoSearchRow">
+      <label class="toggle" style="display:flex;align-items:flex-start;gap:8px;font-size:13px;line-height:1.55;margin-top:10px;">
+        <input type="checkbox" id="setOcrAutoSearch" style="margin-top:3px">
+        <span>截图识别达标后自动搜题（快捷指令「截屏搜题」专用）<br>
+        <span class="muted">打开后：用快捷指令截屏 → 本机识别 → <b>AI 精读</b> → 自动搜题，全程不用点。关闭则回到现在这样：识别完需手动点「识别并搜题」。识别太差（题干&lt;8字或选项&lt;2个）时无论如何都会停在识别页等手改。</span></span>
+      </label>
+      </div>
     </div>
     <div class="card" style="border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:14px;">
       <div style="font-weight:600;margin-bottom:8px;">AI 出网总开关</div>
@@ -6658,6 +6665,37 @@ async function handleImage(file){
   _ocrState.text=text;
   _ocrState.gate=ocrGate(text);
   renderOcrUI(area,img.src,text,file,img.origW,img.origH);
+
+  /* m7：快捷指令「截图搜题」（shot / ocr-latest）专用 —— 识别达标后自动搜题。
+     达标 = 题干≥8字 且 读到≥2个选项（ocrGate）。读得太差就停在识别页等手动改，绝不白搜。
+     开关在设置里（默认开）；关掉即退回现在的人工点「识别并搜题」。
+     __shortcutOcr 只由 iOS 桥接的 shot/ocr-latest 分支置 true，消费一次即清，
+     不影响「图片识别」页的手动选图 / 拍照（那些分支从不设这个标记）。 */
+  const _shortcutOcr = !!(window.__SB && window.__SB.__shortcutOcr);
+  if (window.__SB) window.__SB.__shortcutOcr = false;   // 消费，避免污染后续手动识别
+  if (_shortcutOcr && settings().ocrAutoSearch !== false) {
+    const _g = _ocrState.gate;
+    if (_g && _g.stemChars >= 8 && _g.optCount >= 2) {
+      const _aiAvail = aiAllowed() && !!(window.aiBridge && window.aiBridge.recognize) && !!getActiveModel();
+      if (_aiAvail) {
+        // 先 AI 精读：跑完（见 ocrAiRead 末尾）再自动点「识别并搜题」
+        window.__SB.__shortcutOcrAuto = true;
+        toast("识别达标，将用 AI 精读后自动搜题…");
+        setTimeout(function () {
+          const _aiBtn = document.getElementById("ocrAi");
+          if (_aiBtn && !_aiBtn.disabled) _aiBtn.click();
+        }, 350);
+      } else {
+        // 没配 AI 模型：直接用本地识别结果自动搜（仍"直接搜"，只是不吃 AI 红利）
+        toast("未配置 AI 模型，已用本地识别结果自动搜题");
+        setTimeout(function () {
+          const _sb = document.getElementById("ocrSearch");
+          if (_sb) _sb.click();
+        }, 350);
+      }
+    }
+    // 不达标：不打自动，留在识别页等手动（符合"读得太差就停"）
+  }
 }
 async function callOCR(url,file){
   const fd=new FormData();fd.append("file",file);
@@ -6896,6 +6934,14 @@ async function ocrAiRead(){
     _ocrState.gate=ocrGate(txt);
     const area=$("#ocrArea");
     if(area)renderOcrUI(area,_ocrState.imgSrc,txt,_ocrState.file,0,0);
+    /* m7：快捷指令截图场景下，AI 精读完成后自动点「识别并搜题」 */
+    if (window.__SB && window.__SB.__shortcutOcrAuto) {
+      window.__SB.__shortcutOcrAuto = false;
+      setTimeout(function () {
+        const _sb = document.getElementById("ocrSearch");
+        if (_sb) _sb.click();
+      }, 200);
+    }
     toast("AI 精读完成：题型「"+d.type+"」、选项 "+(d.opts||[]).length+" 个、"+(d.a?("答案「"+d.a+"」"):"图上没写答案"));
   }finally{
     _ocrAiBusy=false;
@@ -7137,6 +7183,10 @@ function openSettings(){
   const ss=$("#setSearchSeg");if(ss)ss.checked=st.searchSeg!==false;
   // v1.0.61：图片识别「按坐标重排」开关（默认开）
   const rr=$("#setOcrReorder");if(rr)rr.checked=st.ocrReorder!==false;
+  // m7：快捷指令截图自动搜题开关（默认开）
+  const ao2=$("#setOcrAutoSearch");if(ao2)ao2.checked=st.ocrAutoSearch!==false;
+  const aoRow=document.getElementById("setOcrAutoSearchRow");
+  if(aoRow)aoRow.style.display=(window.__SB?"":"none");   // 仅 iOS（有快捷指令截图入口）显示，桌面版隐藏
   const ao=$("#setAiOff");if(ao)ao.checked=st.aiOff===true;
   // v1.0.10：渲染 AI 模型列表
   renderAiModelList();
@@ -7173,6 +7223,8 @@ $("#setSave").addEventListener("click",()=>{
   const ss=$("#setSearchSeg");if(ss)st.searchSeg=ss.checked;
   // v1.0.61：图片识别「按坐标重排」开关
   const rr=$("#setOcrReorder");if(rr)st.ocrReorder=rr.checked;
+  // m7：快捷指令截图自动搜题开关
+  const ao2=$("#setOcrAutoSearch");if(ao2)st.ocrAutoSearch=ao2.checked;
   const ao=$("#setAiOff");if(ao)st.aiOff=ao.checked;
   saveSettings(st);$("#setMask").classList.remove("on");
   applyAiOffBar();

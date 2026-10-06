@@ -689,6 +689,59 @@ const PAGE_TESTS = `
     chk("第 17 节（整题检索）执行成功", false, (e && e.message) || String(e));
   }
 
+  /* ---------- 18. 快捷指令截图「AI 精读 → 自动搜题」（m7）---------- */
+  try {
+    function _mkFakeFile(){ try { return new File([new Uint8Array([1,2,3,4])], "shot.png", {type:"image/png"}); } catch(e){ return { name:"shot.png", type:"image/png" }; } }
+    const _goodOcr = "2、为预防工作面漏顶事故应当采取（）。\\nA．加强支护\\nB．加强通风\\nC．加强监测\\nD．以上都是";
+    const _poorOcr = "图";
+    const _aiData = { type:"单选题", q:"2、为预防工作面漏顶事故应当采取（）。", opts:[{label:"A",text:"加强支护"},{label:"B",text:"加强通风"},{label:"C",text:"加强监测"},{label:"D",text:"以上都是"}], a:"D" };
+
+    // 桩：本机 OCR 返回"达标"或"不达标"；AI 精读返回结构化；有可用模型
+    const _origOcrBlocks = window.ocrLocalBlocks;
+    const _origMAi = window.mAiRecognize;
+    const _origGetModel = window.getActiveModel;
+    const _origDoSearch = window.doSearch;
+    let _fired = false;
+    window.doSearch = function(){ _fired = true; };
+    window.getActiveModel = function(){ return { name:"测试模型", modelName:"test" }; };
+    window.mAiRecognize = function(){ return Promise.resolve({ ok:true, data:_aiData }); };
+
+    async function _runShortcut(ocrText, autoOn){
+      _fired = false;
+      if (window.__SB) { window.__SB.__shortcutOcr = false; window.__SB.__shortcutOcrAuto = false; }
+      const st = window.settings(); st.ocrAutoSearch = autoOn; window.saveSettings(st);
+      window.ocrLocalBlocks = function(){ return Promise.resolve({ ok:true, text:ocrText, groups:[], lowBlocks:[], lowUsable:false, engine:"Umi-OCR", ms:5, blocks:5 }); };
+      if (window.__SB) window.__SB.__shortcutOcr = true;   // 等价于 app-bridge 的 shot 分支
+      const f = _mkFakeFile();
+      await window.handleImage(f);
+      await new Promise(function(r){ setTimeout(r, 900); });  // 等：AI 精读(桩) + 自动点搜题
+      return _fired;
+    }
+
+    // ① 开关开 + OCR 达标 → 应自动搜题
+    const firedOn = await _runShortcut(_goodOcr, true);
+    chk("auto(开·达标): 截图识别达标后自动搜题", firedOn === true, "searchFired="+firedOn);
+    chk("auto(开·达标): __shortcutOcr 已消费（不影响手动）", window.__SB ? window.__SB.__shortcutOcr === false : true);
+
+    // ② 开关关 → 不打自动（退回人工点）
+    const firedOff = await _runShortcut(_goodOcr, false);
+    chk("auto(关): 不自动搜题（需手动点）", firedOff === false, "searchFired="+firedOff);
+
+    // ③ 开关开 + OCR 太差（题干<8字）→ 不打自动，停手改
+    const firedPoor = await _runShortcut(_poorOcr, true);
+    chk("auto(开·太差): 识别太差不自动搜题（停手改）", firedPoor === false, "searchFired="+firedPoor);
+
+    // 复原
+    window.ocrLocalBlocks = _origOcrBlocks;
+    window.mAiRecognize = _origMAi;
+    window.getActiveModel = _origGetModel;
+    window.doSearch = _origDoSearch;
+    if (window.__SB) { window.__SB.__shortcutOcr = false; window.__SB.__shortcutOcrAuto = false; }
+    const _rst = window.settings(); delete _rst.ocrAutoSearch; window.saveSettings(_rst);
+  } catch (e) {
+    chk("第 18 节（截图自动搜题 m7）执行成功", false, (e && e.message) || String(e));
+  }
+
   } catch (fatal) {
     // 这里同样要写双反斜杠（见上面 RAW_OCR 的说明）
     chk("页面测试脚本未中途抛错", false,
