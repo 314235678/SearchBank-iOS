@@ -772,7 +772,7 @@
 <div class="mask" id="setMask">
   <div class="modal">
     <h3>设置</h3>
-    <div class="muted" style="margin:-4px 0 10px;font-size:13px;">当前版本 <b>v1.0.64</b> <span style="display:inline-block;padding:1px 8px;border-radius:8px;background:#eaf1ff;color:#1d4ed8;font-size:12px;font-weight:600;margin-left:2px;">手机版 · iOS m7</span>（新增：<b>快捷指令截图后「AI 精读 → 自动搜题」</b> —— 设置里「图片识别」新增开关「截图识别达标后自动搜题」（默认开）：用快捷指令截屏搜题时，本机识别达标（题干≥8字且读到≥2个选项）会先跑 AI 精读、再自动搜题，全程不用点；关闭则回到现在这样需手动点「识别并搜题」）</div>
+    <div class="muted" style="margin:-4px 0 10px;font-size:13px;">当前版本 <b>v1.0.65</b> <span style="display:inline-block;padding:1px 8px;border-radius:8px;background:#eaf1ff;color:#1d4ed8;font-size:12px;font-weight:600;margin-left:2px;">手机版 · iOS m8</span>（修复：<b>「AI 精读 → 自动搜题」不再被本地 OCR 质量卡死</b> —— 上一版把"达标才自动搜"的判断锁在本地 OCR 那一瞬，像「城市更新十五五规划」这种带书名号的长题干、四个长选项，本地 OCR 容易把 A/B/C/D 标号数丢，导致选项判成不足、自动链第一步就断、停在识别页不跳转；本版改为：只要快捷指令进来、开关开着，就先无条件跑 AI 精读（AI 看的是原图，本地 OCR 再烂也不影响），精读拿到结构化结果后再判断"题干≥8字且选项≥2"才自动搜）</div>
     <div class="card" style="border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:14px;">
       <div style="font-weight:600;margin-bottom:6px;">本地文件夹保存（防浏览器清理）</div>
       <div id="folderStatus" class="muted" style="margin-bottom:8px;font-weight:400;"></div>
@@ -6666,35 +6666,40 @@ async function handleImage(file){
   _ocrState.gate=ocrGate(text);
   renderOcrUI(area,img.src,text,file,img.origW,img.origH);
 
-  /* m7：快捷指令「截图搜题」（shot / ocr-latest）专用 —— 识别达标后自动搜题。
-     达标 = 题干≥8字 且 读到≥2个选项（ocrGate）。读得太差就停在识别页等手动改，绝不白搜。
+  /* m8：快捷指令「截图搜题」（shot / ocr-latest）专用 —— 先 AI 精读、精读后才判断达标自动搜题。
+     关键修复：上一版（m7）把"达标才自动搜"的判断锁在本地 OCR 那一瞬（题干≥8字且选项≥2），
+     本地 OCR 把选项数错就整条链断掉、停在识别页不跳转；本版改为——
+     本地 OCR 只负责把题目从截图截出来，只要快捷指令进来、开关开着，就先点亮"自动流程"标记、
+     无条件唤 AI 精读（AI 看的是原图，本地 OCR 再烂也不影响），AI 精读拿到结构化结果后
+     再判断"题干≥8字且选项≥2"才自动点「识别并搜题」（见 ocrAiRead 末尾）。
      开关在设置里（默认开）；关掉即退回现在的人工点「识别并搜题」。
      __shortcutOcr 只由 iOS 桥接的 shot/ocr-latest 分支置 true，消费一次即清，
      不影响「图片识别」页的手动选图 / 拍照（那些分支从不设这个标记）。 */
   const _shortcutOcr = !!(window.__SB && window.__SB.__shortcutOcr);
   if (window.__SB) window.__SB.__shortcutOcr = false;   // 消费，避免污染后续手动识别
   if (_shortcutOcr && settings().ocrAutoSearch !== false) {
-    const _g = _ocrState.gate;
-    if (_g && _g.stemChars >= 8 && _g.optCount >= 2) {
-      const _aiAvail = aiAllowed() && !!(window.aiBridge && window.aiBridge.recognize) && !!getActiveModel();
-      if (_aiAvail) {
-        // 先 AI 精读：跑完（见 ocrAiRead 末尾）再自动点「识别并搜题」
-        window.__SB.__shortcutOcrAuto = true;
-        toast("识别达标，将用 AI 精读后自动搜题…");
-        setTimeout(function () {
-          const _aiBtn = document.getElementById("ocrAi");
-          if (_aiBtn && !_aiBtn.disabled) _aiBtn.click();
-        }, 350);
-      } else {
-        // 没配 AI 模型：直接用本地识别结果自动搜（仍"直接搜"，只是不吃 AI 红利）
+    const _aiAvail = aiAllowed() && !!(window.aiBridge && window.aiBridge.recognize) && !!getActiveModel();
+    if (_aiAvail) {
+      // m8：先点亮"自动流程"标记（无论本地 OCR 达不达标），再无条件唤 AI 精读；
+      // AI 看原图、本地 OCR 数错选项也没关系，精读后才判断达标（见 ocrAiRead 末尾）。
+      window.__SB.__shortcutOcrAuto = true;
+      toast("已启动自动搜题（先 AI 精读）…");
+      setTimeout(function () {
+        const _aiBtn = document.getElementById("ocrAi");
+        if (_aiBtn && !_aiBtn.disabled) _aiBtn.click();
+      }, 350);
+    } else {
+      // 没配 AI 模型：只能用本地识别结果，看本地 gate 达标（题干≥8字且选项≥2）才自动搜
+      const _g = _ocrState.gate;
+      if (_g && _g.stemChars >= 8 && _g.optCount >= 2) {
         toast("未配置 AI 模型，已用本地识别结果自动搜题");
         setTimeout(function () {
           const _sb = document.getElementById("ocrSearch");
           if (_sb) _sb.click();
         }, 350);
       }
+      // 不达标：停住等手动（符合"读得太差就停"）
     }
-    // 不达标：不打自动，留在识别页等手动（符合"读得太差就停"）
   }
 }
 async function callOCR(url,file){
@@ -6921,7 +6926,7 @@ async function ocrAiRead(){
   toast("🤖 AI 正在看图（联网，约 1~3 秒）…");
   try{
     const r=await mAiRecognize(_ocrState.file);
-    if(!r||!r.ok){toast("AI 精读失败："+((r&&r.error)||"未知原因"));return;}
+    if(!r||!r.ok){toast("AI 精读失败："+((r&&r.error)||"未知原因"));if(window.__SB)window.__SB.__shortcutOcrAuto=false;return;}
     const d=r.data;
     const txt=ocrStructToText(d);
     if(!txt){toast("AI 没读出内容");return;}
@@ -6934,13 +6939,20 @@ async function ocrAiRead(){
     _ocrState.gate=ocrGate(txt);
     const area=$("#ocrArea");
     if(area)renderOcrUI(area,_ocrState.imgSrc,txt,_ocrState.file,0,0);
-    /* m7：快捷指令截图场景下，AI 精读完成后自动点「识别并搜题」 */
+    /* m8：快捷指令截图场景下，AI 精读完成后用【精读结果】判断达标才自动搜题
+       （题干≥8字且选项≥2）。本地 OCR 再烂也不影响——AI 看图读准后达标即可自动搜，
+       命中第一题那种"带书名号的长题干/四个长选项、本地 OCR 把 A/B/C/D 标号数丢"的情况。 */
     if (window.__SB && window.__SB.__shortcutOcrAuto) {
       window.__SB.__shortcutOcrAuto = false;
-      setTimeout(function () {
-        const _sb = document.getElementById("ocrSearch");
-        if (_sb) _sb.click();
-      }, 200);
+      const _g = _ocrState.gate;   // 此刻 gate 已是 AI 精读结果（6940 行附近重算过）
+      if (_g && _g.stemChars >= 8 && _g.optCount >= 2) {
+        setTimeout(function () {
+          const _sb = document.getElementById("ocrSearch");
+          if (_sb) _sb.click();
+        }, 200);
+      } else {
+        toast("AI 精读结果较短或选项不足，已停在识别页，请确认后手动搜题");
+      }
     }
     toast("AI 精读完成：题型「"+d.type+"」、选项 "+(d.opts||[]).length+" 个、"+(d.a?("答案「"+d.a+"」"):"图上没写答案"));
   }finally{

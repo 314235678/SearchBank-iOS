@@ -689,7 +689,7 @@ const PAGE_TESTS = `
     chk("第 17 节（整题检索）执行成功", false, (e && e.message) || String(e));
   }
 
-  /* ---------- 18. 快捷指令截图「AI 精读 → 自动搜题」（m7）---------- */
+  /* ---------- 18. 快捷指令截图「AI 精读 → 自动搜题」（m8）---------- */
   try {
     function _mkFakeFile(){ try { return new File([new Uint8Array([1,2,3,4])], "shot.png", {type:"image/png"}); } catch(e){ return { name:"shot.png", type:"image/png" }; } }
     const _goodOcr = "2、为预防工作面漏顶事故应当采取（）。\\nA．加强支护\\nB．加强通风\\nC．加强监测\\nD．以上都是";
@@ -727,9 +727,16 @@ const PAGE_TESTS = `
     const firedOff = await _runShortcut(_goodOcr, false);
     chk("auto(关): 不自动搜题（需手动点）", firedOff === false, "searchFired="+firedOff);
 
-    // ③ 开关开 + OCR 太差（题干<8字）→ 不打自动，停手改
+    // ③ 开关开 + 本地 OCR 极烂（"图"，题干<8字）→ m8 下仍自动搜：
+    //    本地 OCR 不再卡自动流程，先无条件跑 AI 精读，AI 看图读准后达标即自动搜（命中第一题"本地 OCR 把选项数丢"）
     const firedPoor = await _runShortcut(_poorOcr, true);
-    chk("auto(开·太差): 识别太差不自动搜题（停手改）", firedPoor === false, "searchFired="+firedPoor);
+    chk("auto(开·本地OCR极烂): AI 精读后达标仍自动搜（m8 修复）", firedPoor === true, "searchFired="+firedPoor);
+
+    // ③b 第一题式：长题干 + 本地 OCR 把 A/B/C/D 标号数丢（optCount<2 但题干≥8字）→
+    //      m7 下会被本地 gate 卡住不自动；m8 下本地 OCR 再烂也不影响，AI 精读后达标即自动搜
+    const _localBadOpt = "国务院《城市更新“十五五”规划》提出要建立可持续的城市更新机制（）。\\n加强生态修复与绿地建设\\n推进老旧小区改造提升\\n完善基础设施补短板\\n强化安全管理责任落实";
+    const firedBadOpt = await _runShortcut(_localBadOpt, true);
+    chk("auto(开·长题干+选项标号被数丢): 仍自动搜（m8 修复，命中第一题）", firedBadOpt === true, "searchFired="+firedBadOpt);
 
     // 复原
     window.ocrLocalBlocks = _origOcrBlocks;
