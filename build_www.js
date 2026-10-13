@@ -17,7 +17,7 @@
 const fs = require("fs");
 const path = require("path");
 
-const DESKTOP_DIR = "E:/workbuddy/2026-08-23-17-55-30/desktop";
+const DESKTOP_DIR = "E:/workbuddy/搜题平台/desktop";
 const SRC_HTML = path.join(DESKTOP_DIR, "搜题平台.html");
 const SRC_LIB_DIR = path.join(DESKTOP_DIR, "lib");
 
@@ -37,6 +37,20 @@ function fail(msg) {
 }
 
 if (!fs.existsSync(srcHtml)) fail("找不到电脑版网页：" + srcHtml);
+
+/* ---------- 防误操作闸门（2026-10-13 加） ----------
+   这个脚本是「全量重建基线」：会把 www/index.html 整份换成电脑版网页 + 桥接脚本。
+   但手机版有自己的专有改动（app-bridge 钩子、AI 精读→自动搜题、相册取图、
+   原生 confirm/alert/prompt 等），且历史上还打过局部补丁（如 m9 的搜索提速）。
+   直接跑会把这些**静默冲掉** —— 所以必须显式加 --rebaseline 才放行。
+
+   正确姿势：先 `git diff` 看清当前 www/index.html 与电脑版的差异，
+   想清楚哪些要合并过来，再重建。 */
+if (!process.argv.includes("--rebaseline")) {
+  fail("这是一次「全量重建基线」，会把 iOS 专有改动和已打的补丁一起冲掉。\n"
+    + "  想重建请先核对差异，然后加 --rebaseline 再跑：\n"
+    + "      node build_www.js --rebaseline");
+}
 
 let html = fs.readFileSync(srcHtml, "utf8");
 const beforeBytes = Buffer.byteLength(html, "utf8");
@@ -64,13 +78,14 @@ html = html.slice(0, openTagIdx) + BRIDGE_TAG + "\n" + html.slice(openTagIdx);
 /* 额外带一个「手机版构建号 mN」：手机版和电脑版共用 vX.Y.Z（单一源），
    但手机版会独立修补，装了新版却看不出来是哪个 —— 这个 mN 就是给用户
    核对"我装的到底是不是刚出的那个包"用的。改手机版配套文件时手动 +1。 */
-const MOBILE_BUILD = "m8";   // m1 = 首次移植 v3.0；m2 = 修复导入 + 大文件分块；
+const MOBILE_BUILD = "m9";   // m1 = 首次移植 v3.0；m2 = 修复导入 + 大文件分块；
                              // m3 = 相册取图 + 快捷指令别名 + 剪贴板监听 + 内置题库装载；
                              // m4 = 跟随电脑版 v1.0.62（输入清洗/选项识别）+ 删掉最近搜过 + 结果卡片版面；
                              // m5 = 跟随电脑版 v1.0.63（题干是套话时按选项整条比对）
                              // m6 = AI 模型设置持久化到沙盒文件（重启不丢）+ 原生 confirm/alert/prompt 生效（删除按钮可用）
                              // m7 = 快捷指令截图后「AI 精读→自动搜题」开关（默认开；关掉回到手动点搜题）
                              // m8 = 修复自动搜被本地OCR质量卡死：改为先无条件AI精读、精读后才判断达标才自动搜
+                             // m9 = 跟随电脑版 v1.0.73 的搜索提速（滑窗重构；手机版只打这一处补丁，未重基线）
 const verRe = /当前版本 <b>(v[0-9.]+)<\/b>/;
 const m = verRe.exec(html);
 if (m) {
