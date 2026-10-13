@@ -772,7 +772,7 @@
 <div class="mask" id="setMask">
   <div class="modal">
     <h3>设置</h3>
-    <div class="muted" style="margin:-4px 0 10px;font-size:13px;">当前版本 <b>v1.0.65</b> <span style="display:inline-block;padding:1px 8px;border-radius:8px;background:#eaf1ff;color:#1d4ed8;font-size:12px;font-weight:600;margin-left:2px;">手机版 · iOS m8</span>（修复：<b>「AI 精读 → 自动搜题」不再被本地 OCR 质量卡死</b> —— 上一版把"达标才自动搜"的判断锁在本地 OCR 那一瞬，像「城市更新十五五规划」这种带书名号的长题干、四个长选项，本地 OCR 容易把 A/B/C/D 标号数丢，导致选项判成不足、自动链第一步就断、停在识别页不跳转；本版改为：只要快捷指令进来、开关开着，就先无条件跑 AI 精读（AI 看的是原图，本地 OCR 再烂也不影响），精读拿到结构化结果后再判断"题干≥8字且选项≥2"才自动搜）</div>
+    <div class="muted" style="margin:-4px 0 10px;font-size:13px;">当前版本 <b>v1.0.65</b> <span style="display:inline-block;padding:1px 8px;border-radius:8px;background:#eaf1ff;color:#1d4ed8;font-size:12px;font-weight:600;margin-left:2px;">手机版 · iOS m9</span>（本版 m9：只改了搜索热点算法 —— 长题干 / 整题粘贴不再卡死，检索结果、排序、相似度判定与旧版完全一致；电脑版 v1.0.73 的「全题库查重」是题库管理功能，暂未移植到手机版）（修复：<b>「AI 精读 → 自动搜题」不再被本地 OCR 质量卡死</b> —— 上一版把"达标才自动搜"的判断锁在本地 OCR 那一瞬，像「城市更新十五五规划」这种带书名号的长题干、四个长选项，本地 OCR 容易把 A/B/C/D 标号数丢，导致选项判成不足、自动链第一步就断、停在识别页不跳转；本版改为：只要快捷指令进来、开关开着，就先无条件跑 AI 精读（AI 看的是原图，本地 OCR 再烂也不影响），精读拿到结构化结果后再判断"题干≥8字且选项≥2"才自动搜）</div>
     <div class="card" style="border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:14px;">
       <div style="font-weight:600;margin-bottom:6px;">本地文件夹保存（防浏览器清理）</div>
       <div id="folderStatus" class="muted" style="margin-bottom:8px;font-weight:400;"></div>
@@ -1051,9 +1051,12 @@ let _folderErrAt=0;                  // 上次写失败提示时间（防抖）
 
 function load(){try{return JSON.parse(localStorage.getItem(KEY))||null;}catch(e){return null;}}
 let _mgCache=null; // 题库管理预计算缓存（数据变更时由 save() 置空）
+let _dataVer=0; // v1.0.73：数据版本号。任何增删改（都走 save()）都会 +1，
+               // 归一化缓存 _normCache 靠它判断「题库变了没有」
 let _mgSel=new Set(); // 题库管理-题目管理 批量勾选集合
 function save(){
   _mgCache=null;
+  _dataVer++;_normCache=null;_normIds=null; // v1.0.73：题库变了，归一化缓存作废
   // 内存镜像（localStorage）：始终保留，网页/桌面均可兜底
   try{localStorage.setItem(KEY,JSON.stringify(DATA));}
   catch(e){if(!desktopFS)toast("⚠ 浏览器缓存已满（可能含大量图片），本地备份写入失败；文件夹仍会尝试保存");}
@@ -1313,7 +1316,16 @@ function norm(s){
 }
 /* 构建一次归一化缓存，供预筛与评分复用（避免每题重复正则 4-5 次）
    v1.0.2：题干 Q 与选项 OPT 分开缓存（题干权重 2x、选项 0.5x，对齐手机版） */
+let _normCache=null,_normIds=null,_normVer=-1;
 function buildNormCache(items){
+  /* v1.0.73：题库没变就直接复用 —— 原来每搜一次都把 66809 题重新归一化一遍
+     （实测 ≈460ms，短关键词搜索里它比评分本身还贵）。
+     失效方式与 _mgCache / _bankCountCache 完全一致：save() 里清空、版本号 +1。 */
+  if(_normCache&&_normVer===_dataVer&&_normIds&&_normIds.length===items.length){
+    let same=true;
+    for(let i=0;i<items.length;i++){if(_normIds[i]!==items[i].id){same=false;break;}}
+    if(same)return _normCache;
+  }
   const c=new Map();
   for(const it of items){
     let opt="";
@@ -1321,43 +1333,153 @@ function buildNormCache(items){
     if(o&&o.length){for(let k=0;k<o.length;k++)opt+=norm(o[k].text||"")+" ";}
     c.set(it.id,{Q:norm(it.q||""),OPT:opt,A:norm(it.a||""),N:norm(it.note||""),C:norm(it.cat||"")});
   }
+  _normCache=c;
+  _normIds=new Array(items.length);
+  for(let i=0;i<items.length;i++)_normIds[i]=items[i].id;
+  _normVer=_dataVer;
   return c;
 }
-/* 编辑距离（Levenshtein）——复用固定长度数组，避免每次 new 数组产生 GC 压力 */
+/* 编辑距离（Levenshtein）——复用固定长度数组，避免每次 new 数组产生 GC 压力。
+   v1.0.73：改成「有限编辑距离」——真实距离 ≤ limit 时返回真值，否则返回 limit+1。 */
 const ED={p:[],c:[]};
-function editDist(a,b){
+
+/* 窗口字符缺口下界（v1.0.73 第二层，可选）：早否决用。
+   ed(A,W) ≥ max(Σ_c max(0,cntA−cntW), Σ_c max(0,cntW−cntA))。
+   对齐 A 与窗口 W 时，A 里被"配掉"的字符必然是 W 字符多重集的子集，多出来的
+   只能靠替换/删除消化，而每一步最多消掉一个 —— 于是这个缺口就是编辑距离的下界。
+   对每个允许的窗口（起点 s、长度 sl..sl+tol）都算一遍，若最小值都 > lim，
+   则任何窗口的编辑距离都不可能 ≤ lim，整段 DP 可以不做。
+   代价：每起点 O(sl+tol)，比 DP 便宜约 sl 倍；只在长串上启用（见下方 sl>=128 的门槛）。
+   计数用定长表 +「逐起点重建、用完清零」，不需每次分配。 */
+const _CA=new Uint16Array(65536), _CW=new Uint16Array(65536);
+function gapRejects(A,T,sl,tol,lim){
+  const n=T.length, maxS=n-sl;
+  if(maxS<0)return true;
+  const maxL=sl+tol, m=A.length;
+  for(let i=0;i<m;i++)_CA[A.charCodeAt(i)]++;
+  let reject=true;
+  for(let s=0;s<=maxS&&reject;s++){
+    const jTop=Math.min(maxL,n-s);
+    let DS=0,DW=0,j=0;
+    for(;j<jTop;j++){
+      const c=T.charCodeAt(s+j), a=_CA[c], w=_CW[c];
+      if(w<a)DS--; else DW++;                 /* 窗口多收一个字符：缺口落在 A 侧还是 W 侧 */
+      _CW[c]=w+1;
+      if(j+1>=sl){                            /* 长度落进 [sl, maxL] 才是一个合法窗口 */
+        const v=DS>DW?DS:DW;
+        if(v<=lim){reject=false;break;}
+      }
+    }
+    for(let k=0;k<j;k++)_CW[T.charCodeAt(s+k)]=0;   /* 还原本起点累积的窗口计数 */
+  }
+  for(let i=0;i<m;i++)_CA[A.charCodeAt(i)]=0;
+  return reject;
+}
+
+function editDistLimited(a,b,limit){
   const m=a.length,n=b.length;
-  if(!m)return n; if(!n)return m;
+  if(limit<0)return 1;
+  if(Math.abs(m-n)>limit)return limit+1;
+  if(!m)return n<=limit?n:limit+1;
+  if(!n)return m<=limit?m:limit+1;
   let prev=ED.p,cur=ED.c;
   if(prev.length<n+1){prev=ED.p=new Array(n+1);cur=ED.c=new Array(n+1);}
-  for(let j=0;j<=n;j++)prev[j]=j;
+  const cap=limit+1;
+  for(let j=0;j<=n;j++)prev[j]=(j<=limit)?j:cap;
   for(let i=1;i<=m;i++){
-    cur[0]=i; const ai=a[i-1];
+    let rowMin=(i<=limit)?i:cap;
+    cur[0]=rowMin;
+    const ai=a.charCodeAt(i-1);
     for(let j=1;j<=n;j++){
-      const cost=ai===b[j-1]?0:1;
-      const v=prev[j]+1, v2=cur[j-1]+1, v3=prev[j-1]+cost;
-      cur[j]=v<v2?(v<v3?v:v3):(v2<v3?v2:v3);
+      const cost=(ai===b.charCodeAt(j-1))?0:1;
+      let v=prev[j-1]+cost;
+      const v1=prev[j]+1,v2=cur[j-1]+1;
+      if(v1<v)v=v1;
+      if(v2<v)v=v2;
+      if(v>cap)v=cap;
+      cur[j]=v;
+      if(v<rowMin)rowMin=v;
     }
+    if(rowMin>limit)return cap;
     const t=prev;prev=cur;cur=t;
   }
-  return prev[n];
+  const r=prev[n];
+  return r<=limit?r:cap;
 }
-/* 模糊相似度：在较长串中滑窗找与较短串最接近的片段，返回 0~1（容错错别字/漏字） */
-function fuzzyScore(qn,tn){
+/* 旧名字保留（题库查重等处的 editDist 若被引用，行为与旧版一致）。 */
+function editDist(a,b){return editDistLimited(a,b,Math.max(a.length,b.length));}
+
+/* 模糊相似度：在较长串中滑窗找与较短串最接近的片段，返回 0~1（容错错别字/漏字）。
+   ── v1.0.73 滑窗重构 ─────────────────────────────────────────────────
+   旧实现（v1.0.72 及更早）对**每个起点**都要跑 (容错长度+1) 遍完整 DP：
+       for(i) for(k=0..tol) DP(shortS, longS.slice(i, i+sl+k))
+   同一个起点下这些窗口是**同一段长串的前缀族**，DP 的公共前缀被重算了
+   (tol+1) 遍。实测线上单次 fuzzyScore 平均触发 335 遍 DP —— 这就是长题干
+   /整题粘贴时"卡死"的全部原因。
+   新实现对每个起点只跑一遍 DP（列 = 长串自 i 起的前 sl+tol 个字符），
+   结束时取 D[m][j]（j ∈ [sl, min(sl+tol, n-i)]）的最小值 ——
+   取的还是**同一批窗口、同一批距离、同一个最小值**，只是不再重复计算。
+   · 不传 limit：结果与旧实现逐位相同（已用 1346 组真实配对逐对核对）。
+   · 传 limit（调用方只关心"最优距离是否 ≤ limit"）：被丢弃/封顶的格子其真实值
+     必然 > limit ≥ best，不可能改变阈值判定的布尔结果。
+   · 行最小值随行号单调不减 ⇒ 本起点某行最小值已 > limit 时，本起点余下的行
+     全部可以跳过。 */
+function fuzzyScore(qn,tn,limit){
   if(!qn||!tn)return 0;
   if(qn===tn)return 1;
   if(tn.includes(qn)||qn.includes(tn))return 1;
   const sl=qn.length<=tn.length?qn.length:tn.length;
   const longS=qn.length<=tn.length?tn:qn;
   const shortS=qn.length<=tn.length?qn:tn;
-  let best=sl, tol=Math.max(1,Math.floor(sl*0.34));
-  for(let i=0;i<longS.length;i++){
-    for(let k=0;k<=tol&&i+sl+k<=longS.length;k++){
-      const sub=longS.slice(i,i+sl+k);
-      const d=editDist(shortS,sub);
-      if(d<best){best=d;if(best<=1)break;}
-    }
+  const tol=Math.max(1,Math.floor(sl*0.34));
+  const cap=(limit===undefined||limit>=sl)?sl:limit+1;
+  let best=cap;
+  const m=shortS.length, n=longS.length, maxL=sl+tol, maxS=n-sl;
+  if(maxS<0)return 0;
+  /* 第二层早否决：若所有合法窗口的「字符缺口下界」都 > lim，DP 整段不用做。
+     只对 sl>=128 的长串启用 —— 实测这一区间基本 100% 直接否决（纯赚），
+     而中短串上这条检查的相对开销更大、否决率又低，不划算。 */
+  if(sl>=128&&gapRejects(shortS,longS,sl,tol,best-1)){
+    const r0=1-best/sl;
+    return r0>0?r0:0;
+  }
+  const cols=Math.min(n,maxL)+1;
+  let prev=ED.p,cur=ED.c;
+  if(prev.length<cols){prev=ED.p=new Array(cols);cur=ED.c=new Array(cols);}
+  for(let s=0;s<=maxS;s++){
     if(best<=1)break;
+    const jTop=Math.min(maxL,n-s);
+    const lim=best-1, hard=lim+1;
+    /* 行 0：D[0][j]=j（j>lim 的格子真实值也 >lim，封顶即可） */
+    for(let j=0;j<=jTop;j++)prev[j]=(j<=lim)?j:hard;
+    /* 行 i=1..m：只在 |i-j|<=lim 的带内精算，带外真实值必然 >lim */
+    let dead=false, keep=null;
+    for(let i=1;i<=m;i++){
+      const from=i-lim>0?i-lim:0;
+      let rmin=hard;
+      for(let j=0;j<from;j++)cur[j]=hard;
+      if(from===0){
+        const v=(i<=lim)?i:hard;
+        cur[0]=v; if(v<rmin)rmin=v;
+      }
+      const ai=shortS.charCodeAt(i-1), base=s-1;
+      for(let j=from===0?1:from;j<=jTop;j++){
+        const cost=(ai===longS.charCodeAt(base+j))?0:1;
+        let v=prev[j-1]+cost;
+        const v1=prev[j]+1, v2=cur[j-1]+1;
+        if(v1<v)v=v1;
+        if(v2<v)v=v2;
+        if(v>hard)v=hard;
+        cur[j]=v;
+        if(v<rmin)rmin=v;
+      }
+      const t=prev;prev=cur;cur=t;
+      if(rmin>lim){dead=true;break;}
+      if(i===m)keep=prev;
+    }
+    if(!dead&&keep){
+      for(let j=sl;j<=jTop;j++){const v=keep[j];if(v<best){best=v;if(best<=1)break;}}
+    }
   }
   const ratio=1-best/sl;
   return ratio>0?ratio:0;
@@ -1391,7 +1513,7 @@ function scoreItem(c,qn){
   if(qn.length<3){
     let s=0;
     if(Q.includes(qn))s+=10*STEM_W;
-    else if(fuzzyScore(qn,Q)>=0.5)s+=5*STEM_W;
+    else if(fuzzyScore(qn,Q,Math.floor(Math.min(qn.length,Q.length)/2))>=0.5)s+=5*STEM_W;
     if(OPT && OPT.includes(qn))s+=2*OPT_W;
     if(A.includes(qn))s+=2;
     if(N.includes(qn))s+=1;
@@ -1401,10 +1523,10 @@ function scoreItem(c,qn){
   let s=0;
   // 题干命中（权重高）
   if(Q.includes(qn))s+=10*STEM_W;
-  else if(charHit(Q,qn)){const sq=fuzzyScore(qn,Q);if(sq>=0.5)s+=10*STEM_W*sq;}
+  else if(charHit(Q,qn)){const sq=fuzzyScore(qn,Q,Math.floor(Math.min(qn.length,Q.length)/2));if(sq>=0.5)s+=10*STEM_W*sq;}
   // 选项命中（权重低）
   if(OPT && OPT.includes(qn))s+=2*OPT_W;
-  else if(OPT && charHit(OPT,qn)){const sq=fuzzyScore(qn,OPT);if(sq>=0.5)s+=2*OPT_W*sq;}
+  else if(OPT && charHit(OPT,qn)){const sq=fuzzyScore(qn,OPT,Math.floor(Math.min(qn.length,OPT.length)/2));if(sq>=0.5)s+=2*OPT_W*sq;}
   // 答案/解析/分类精确包含
   if(A.includes(qn))s+=2;
   if(N.includes(qn))s+=1;
@@ -1790,14 +1912,22 @@ function doSearch(){
     meta.textContent='正在搜索 '+total+' 道题…';
     box.innerHTML='<div class="empty" style="padding:30px"><div class="muted">正在全库检索，请稍候…</div></div>';
     let i=0,acc=[];
-    const step=400;
+    /* v1.0.73：分批改成「按时间切片」——
+       旧版固定 400 题一批，长查询下单独一批就要几十秒，界面整段假死（用户报的"卡死"）。
+       现在每批目标 ≈120ms，主线程每秒能回到浏览器 8 次左右，进度文字一直在动。
+       只改「多久让出主线程」，不改任何评分 / 排序 / 命中逻辑。 */
+    let step=400;
     const tick=()=>{
       if(token!==_searchToken)return; // 已发起新搜索则丢弃
+      const _t0=Date.now();
       const end=Math.min(i+step,total);
       for(;i<end;i++){
         const s=scoreBlocks(cache.get(pool[i].id));
         if(s>0)acc.push({it:pool[i],s});
       }
+      const _el=Date.now()-_t0;
+      if(_el>220)step=Math.max(50,Math.floor(step*120/_el));
+      else if(_el<50&&step<4000)step=Math.min(4000,step*2);
       meta.textContent='正在搜索… 已匹配 '+acc.length+' 题（'+(end>total?total:end)+'/'+total+'）';
       if(i<total){setTimeout(tick,16);}
       else{finishSearch(acc,q,filters);}
@@ -1832,9 +1962,10 @@ function segSearch(segs,pool,cache,filters,token,noise){
     // 有选项时：题干单独再算一遍并加成 —— 选项是有用的区分特征（实测删掉选项 Top1 会降），
     // 但不能盖过题干，所以只给 0.5 权重。
     const scoreStem=seg.opts.length?makeQueryScorer(cache,seg.stem.join("")):null;
-    let i=0;const step=800;
+    let i=0;let step=800;
     const tick=()=>{
       if(token!==_searchToken)return;
+      const _t0=Date.now();
       const end=Math.min(i+step,total);
       for(;i<end;i++){
         const it=pool[i],c=cache.get(it.id);
@@ -1842,6 +1973,10 @@ function segSearch(segs,pool,cache,filters,token,noise){
         if(s>0&&scoreStem){const s2=scoreStem(c);if(s2>0)s+=s2*0.5;}
         if(s>0)b.acc.push({it,s});
       }
+      /* v1.0.73：同样按时间切片（见 doSearch 里的说明） */
+      const _el=Date.now()-_t0;
+      if(_el>220)step=Math.max(50,Math.floor(step*120/_el));
+      else if(_el<50&&step<4000)step=Math.min(4000,step*2);
       meta.textContent="正在分段检索… 第 "+(si+1)+"/"+buckets.length+" 段（"+end+"/"+total+"）";
       if(i<total){setTimeout(tick,16);}
       else{si++;setTimeout(runSeg,16);}
