@@ -772,7 +772,7 @@
 <div class="mask" id="setMask">
   <div class="modal">
     <h3>设置</h3>
-    <div class="muted" style="margin:-4px 0 10px;font-size:13px;">当前版本 <b>v1.0.65</b> <span style="display:inline-block;padding:1px 8px;border-radius:8px;background:#eaf1ff;color:#1d4ed8;font-size:12px;font-weight:600;margin-left:2px;">手机版 · iOS m9</span>（本版 m9：只改了搜索热点算法 —— 长题干 / 整题粘贴不再卡死，检索结果、排序、相似度判定与旧版完全一致；电脑版 v1.0.73 的「全题库查重」是题库管理功能，暂未移植到手机版）（修复：<b>「AI 精读 → 自动搜题」不再被本地 OCR 质量卡死</b> —— 上一版把"达标才自动搜"的判断锁在本地 OCR 那一瞬，像「城市更新十五五规划」这种带书名号的长题干、四个长选项，本地 OCR 容易把 A/B/C/D 标号数丢，导致选项判成不足、自动链第一步就断、停在识别页不跳转；本版改为：只要快捷指令进来、开关开着，就先无条件跑 AI 精读（AI 看的是原图，本地 OCR 再烂也不影响），精读拿到结构化结果后再判断"题干≥8字且选项≥2"才自动搜）</div>
+    <div class="muted" style="margin:-4px 0 10px;font-size:13px;">当前版本 <b>v1.0.66</b> <span style="display:inline-block;padding:1px 8px;border-radius:8px;background:#eaf1ff;color:#1d4ed8;font-size:12px;font-weight:600;margin-left:2px;">手机版 · iOS m9</span>（本版 m9：只改了搜索热点算法 —— 长题干 / 整题粘贴不再卡死，检索结果、排序、相似度判定与旧版完全一致；电脑版 v1.0.73 的「全题库查重」是题库管理功能，暂未移植到手机版）（修复：<b>「AI 精读 → 自动搜题」不再被本地 OCR 质量卡死</b> —— 上一版把"达标才自动搜"的判断锁在本地 OCR 那一瞬，像「城市更新十五五规划」这种带书名号的长题干、四个长选项，本地 OCR 容易把 A/B/C/D 标号数丢，导致选项判成不足、自动链第一步就断、停在识别页不跳转；本版改为：只要快捷指令进来、开关开着，就先无条件跑 AI 精读（AI 看的是原图，本地 OCR 再烂也不影响），精读拿到结构化结果后再判断"题干≥8字且选项≥2"才自动搜）；<b>v1.0.66</b>：①整题"题干+选项逐字包含"最高优先级排序，选项短的精确题也能排第1（修：国家鼓励投保被挤到75%、井下电气选型被挤到67%）；②"AI精读→自动搜题"去掉"选项≥2个"门槛，选项没读到也自动搜（修：采煤工作面…只显示"没有选项"不搜）；③搜题作用域(题库)持久化，OCR/快捷指令/历史找回自动沿用上次选的库，不用每次重选）</div>
     <div class="card" style="border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:14px;">
       <div style="font-weight:600;margin-bottom:6px;">本地文件夹保存（防浏览器清理）</div>
       <div id="folderStatus" class="muted" style="margin-bottom:8px;font-weight:400;"></div>
@@ -1781,11 +1781,39 @@ function makeQueryScorer(cache,rawText){
   if(blocks.length>1){
     const pq=planQuestion(rawText);
     const optNs=pq.optTexts.map(norm).filter(s=>s.length>=10);
-    /* 要求输入确实有 ≥2 条选项行（防止把"A 类火灾是指…"这类真题干误当成选项），
-       且至少 1 条选项正文够长（≥10 字）才走整题链路。 */
-    if(pq.optTexts.length>=2&&optNs.length){
+    /* 要求输入确实有 ≥2 条选项行（防止把"A 类火灾是指…"这类真题干误当成选项）。
+       v1.0.66：不再要求"至少 1 条选项正文≥10字"才进整题链路 —— 否则选项短
+       （"安全生产""矿井产量"等 4~6 字）的题根本进不来，只能退回模糊路径，
+       于是题干越长、与查询共享字组越多的"沾边题"反而得分更高，精确题排不到前
+       （用户实测：国家鼓励投保 75%、井下电气选型 67%）。现改为：只要 ≥2 条选项
+       就进整题链路，并新增"题干+选项逐字包含"最高优先级证据（见下）。 */
+    if(pq.optTexts.length>=2){
       const stemN=norm(pq.stemText);
+      /* v1.0.66：整题"逐字包含"最强证据 —— 把"题干+选项"拼成 itemBody，
+         与查询的"题干+选项"（已剥选项标号）qBody 做包含判定。命中即视为同一
+         道题，给最高分（须高于整题链路上限 400*100）。覆盖"选项短"的题。
+         容忍：题目比查询最多长 2.5 倍，避免超长题误吞短查询。 */
+      const qOptN=pq.optTexts.map(norm);
+      const qBody=(stemN+" "+qOptN.join(" ")).trim();
       return (c)=>{
+        if(qBody.length>=6){
+          const itemBody=(c.Q+" "+(c.OPT||"")).trim();
+          // 强匹配：查询整段是题目的子串（选项等长时，如下例"井下电气选型"）
+          if(itemBody.length>=qBody.length&&itemBody.length<=qBody.length*2.5&&itemBody.includes(qBody))return 9000*100;
+          // 鲁棒匹配：题干对上 + 每个选项都能在题目选项里找到。覆盖"库里选项比识别
+          // 出的长"的常见情况（识别成"安全生产责任"、库里是"安全生产责任保险"；
+          // 用户实测"国家鼓励投保"被挤到 75%）。两个方向都认：库选项是识别出的
+          // 超集或子集都算同一道题。
+          if(stemN.length>=4&&(c.Q.includes(stemN)||stemN.includes(c.Q))){
+            const qOpts=pq.optTexts.map(norm).filter(s=>s.length>=2);
+            if(qOpts.length>=2){
+              const bOpts=(c.OPT||"").split(/\s+/).filter(s=>s.length>=2);
+              let m=0;
+              for(const qo of qOpts){for(const bo of bOpts){if(bo.length>=qo.length?bo.includes(qo):qo.includes(bo)){m++;break;}}}
+              if(m===qOpts.length)return 9000*100;
+            }
+          }
+        }
         let hit=0;
         for(let i=0;i<optNs.length;i++){if(c.OPT.includes(optNs[i]))hit++;}
         const fullScore=scoreItem(c,q);
@@ -1860,7 +1888,10 @@ function doSearch(){
   }
   const cf=$("#catFilter").value;
   const tf=$("#typeFilter")?$("#typeFilter").value:"";
-  const bf=$("#bankFilter").value;
+  let bf=$("#bankFilter").value;
+  /* v1.0.66：冷启动（快捷指令深链）时下拉可能还没被 fillSearchFilters 恢复，
+     这里兜底用持久化的题库；选了"全部题库"则 _sb 为空、不会覆盖。 */
+  if(!bf){try{const _sb=localStorage.getItem("souti_searchBank");if(_sb)bf=_sb;}catch(e){}}
   const token=++_searchToken;
   const box=$("#searchResults");
   const meta=$("#searchMeta");
@@ -2128,14 +2159,17 @@ function fillSearchFilters(){
     tsel.value=tcur;}
   const bsel=$("#bankFilter");const bcur=bsel.value;
   bsel.innerHTML='<option value="">全部题库</option>'+(DATA.banks||[]).map(b=>'<option value="'+b.id+'">'+esc(b.name)+'</option>').join("");
-  bsel.value=bcur;
+  /* v1.0.66：恢复上次选中的搜题题库（方案 C：搜题作用域留在 App 内、持久化，
+     快捷指令/OCR/历史找回都自动沿用，无需每次重选）。库已被删则静默退回"全部题库"。 */
+  let _sb=null;try{_sb=localStorage.getItem("souti_searchBank");}catch(e){}
+  bsel.value=(_sb!=null&&_sb!=="")?_sb:bcur;
 }
 function fillCatFilter(){fillSearchFilters();}
 $("#searchBtn").addEventListener("click",doSearch);
 $("#searchInput").addEventListener("keydown",e=>{if(e.key==="Enter")doSearch();});
 $("#catFilter").addEventListener("change",doSearch);
 $("#typeFilter").addEventListener("change",doSearch);
-$("#bankFilter").addEventListener("change",doSearch);
+$("#bankFilter").addEventListener("change",()=>{try{localStorage.setItem("souti_searchBank",$("#bankFilter").value);}catch(e){}doSearch();});
 $("#quickGo").addEventListener("click",()=>{go("search");doSearch();});
 $("#quickSearch").addEventListener("keydown",e=>{if(e.key==="Enter"){go("search");doSearch();}});
 
@@ -6826,7 +6860,10 @@ async function handleImage(file){
     } else {
       // 没配 AI 模型：只能用本地识别结果，看本地 gate 达标（题干≥8字且选项≥2）才自动搜
       const _g = _ocrState.gate;
-      if (_g && _g.stemChars >= 8 && _g.optCount >= 2) {
+      /* v1.0.66：自动搜题门槛改为只看"题干≥8字"。去掉了旧的"选项≥2个"要求 ——
+         选项读不到（OCR/AI 偶尔漏标 A/B/C/D）不该卡住整个自动链（用户实测：
+         "采煤工作面不能保持（）个畅通的安全出口"题干清楚却只显示"没有选项"不搜）。 */
+      if (_g && _g.stemChars >= 8) {
         toast("未配置 AI 模型，已用本地识别结果自动搜题");
         setTimeout(function () {
           const _sb = document.getElementById("ocrSearch");
@@ -6942,7 +6979,9 @@ function renderOcrUI(area,b64,text,file,origW,origH){
       (s.opts||[]).forEach(o=>{if(o&&o.text)parts.push(String(o.label||"")+"．"+o.text);});
       if(parts.length>1){q=parts.join("\n");used="AI 结构化（题干+选项）";}
     }
-    go("search");setSearchText(q);$("#catFilter").value="";$("#bankFilter").value="";doSearch();
+    /* v1.0.66：不再清空 bankFilter —— 让"上次选中的搜题题库"沿用下来（方案 C）。
+       catFilter 仍清空（分类是独立维度，每次新题重新判断）。 */
+    go("search");setSearchText(q);$("#catFilter").value="";doSearch();
     ocrHistPush(t);
     if(used)toast("已按 "+used+" 检索");
   };
@@ -7080,13 +7119,16 @@ async function ocrAiRead(){
     if (window.__SB && window.__SB.__shortcutOcrAuto) {
       window.__SB.__shortcutOcrAuto = false;
       const _g = _ocrState.gate;   // 此刻 gate 已是 AI 精读结果（6940 行附近重算过）
-      if (_g && _g.stemChars >= 8 && _g.optCount >= 2) {
+      /* v1.0.66：自动搜题门槛改为只看"题干≥8字"。去掉了旧的"选项≥2个"要求 ——
+         选项读不到（OCR/AI 偶尔漏标 A/B/C/D）不该卡住整个自动链（用户实测：
+         "采煤工作面不能保持（）个畅通的安全出口"题干清楚却只显示"没有选项"不搜）。 */
+      if (_g && _g.stemChars >= 8) {
         setTimeout(function () {
           const _sb = document.getElementById("ocrSearch");
           if (_sb) _sb.click();
         }, 200);
       } else {
-        toast("AI 精读结果较短或选项不足，已停在识别页，请确认后手动搜题");
+        toast("AI 精读结果题干过短，已停在识别页，请确认后手动搜题");
       }
     }
     toast("AI 精读完成：题型「"+d.type+"」、选项 "+(d.opts||[]).length+" 个、"+(d.a?("答案「"+d.a+"」"):"图上没写答案"));
@@ -7253,7 +7295,8 @@ function openOcrHist(){
     b.onclick=()=>{
       const r=list[+b.dataset.hfind];if(!r)return;
       mask.style.display="none";
-      go("search");setSearchText(r.text);$("#catFilter").value="";$("#bankFilter").value="";doSearch();
+      /* v1.0.66：不再清空 bankFilter（方案 C：沿用上次选中的搜题题库）。 */
+      go("search");setSearchText(r.text);$("#catFilter").value="";doSearch();
     };
   });
   mask.querySelectorAll("[data-hzoom]").forEach(im=>{
