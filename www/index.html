@@ -197,6 +197,19 @@
   .mini{padding:7px 12px;border-radius:9px;border:1px solid var(--line);font-size:13px;min-height:38px;background:var(--card);}
   .mini:hover{border-color:var(--pri);color:var(--pri-d);}
   .mini.del{color:var(--red);border-color:#f3c6c6;}
+  /* v1.2.1：填空/简答这类长答案的一键复制键 —— 浮在答案框右上角，float 让后面的
+     文字自动环绕，既不多占一行、也不会盖住答案。电脑版和手机版用同一份实现
+     （手机版 index.html 是电脑版这份网页生成的，实现不一致的话重建时会被冲掉）。 */
+  .qcard .ans .anscopy{float:right;margin:-4px -4px 8px 10px;padding:4px 9px;border-radius:7px;
+    border:1px solid #c3d8f5;background:#f0f6fe;color:var(--pri);font-size:12px;font-weight:600;line-height:1.4;}
+  .qcard .ans .anscopy:hover{background:#e3eefc;border-color:var(--pri);color:var(--pri-d);}
+  .qcard .ans .anscopy:active{background:#d8e8fb;}
+  .qcard .ans .anscopy.done{color:var(--green);border-color:#bfe0c8;background:#eefaf1;}
+  /* 顺手收紧按钮行：手机窄屏下收藏+AI解析+编辑+删除 合计 277px、容器只有 276px，
+     差 1px 就会把「删除」挤到第二行。间距 8→6、左右内边距 12→10 后合计约 255px，
+     小屏也不会再掉行。 */
+  .qcard .ops{gap:6px;}
+  .qcard .ops .mini{padding:8px 10px;}
   .empty{text-align:center;color:var(--sub);padding:40px 10px;}
   .empty svg{width:46px;height:46px;opacity:.4;margin-bottom:10px;}
   /* 图片识别 */
@@ -772,7 +785,7 @@
 <div class="mask" id="setMask">
   <div class="modal">
     <h3>设置</h3>
-    <div class="muted" style="margin:-4px 0 10px;font-size:13px;">当前版本 <b>v1.0.74</b> <span style="display:inline-block;padding:1px 8px;border-radius:8px;background:#eaf1ff;color:#1d4ed8;font-size:12px;font-weight:600;margin-left:2px;">手机版 · iOS m9</span>（本版 m9：只改了搜索热点算法 —— 长题干 / 整题粘贴不再卡死，检索结果、排序、相似度判定与旧版完全一致；电脑版 v1.0.73 的「全题库查重」是题库管理功能，暂未移植到手机版）（修复：<b>「AI 精读 → 自动搜题」不再被本地 OCR 质量卡死</b> —— 上一版把"达标才自动搜"的判断锁在本地 OCR 那一瞬，像「城市更新十五五规划」这种带书名号的长题干、四个长选项，本地 OCR 容易把 A/B/C/D 标号数丢，导致选项判成不足、自动链第一步就断、停在识别页不跳转；本版改为：只要快捷指令进来、开关开着，就先无条件跑 AI 精读（AI 看的是原图，本地 OCR 再烂也不影响），精读拿到结构化结果后再判断"题干≥8字且选项≥2"才自动搜）；<b>v1.0.74</b>：①整题"题干+选项逐字包含"最高优先级排序，选项短的精确题也能排第1（修：国家鼓励投保被挤到75%、井下电气选型被挤到67%）；②"AI精读→自动搜题"去掉"选项≥2个"门槛，选项没读到也自动搜（修：采煤工作面…只显示"没有选项"不搜）；③搜题作用域(题库)持久化，OCR/快捷指令/历史找回自动沿用上次选的库，不用每次重选）</div>
+    <div class="muted" style="margin:-4px 0 10px;font-size:13px;">当前版本 <b>v1.0.75</b> <span style="display:inline-block;padding:1px 8px;border-radius:8px;background:#eaf1ff;color:#1d4ed8;font-size:12px;font-weight:600;margin-left:2px;">手机版 · iOS m10</span>（本版 m10：搜题结果卡片新增<b>「⧉ 复制答案」</b> —— 填空题、简答题这类长答案不用再长按拖选，点一下就把整条答案复制到剪贴板，可直接粘到答题卡或笔记；按钮浮在答案框右上角，不占下面那排按钮，窄屏也不会换行。复制走的是同步 execCommand 通路，iOS 的 WebView 里也能生效；顺带把「收藏/AI 解析/编辑/删除」那排按钮收紧了一点，小屏手机上「删除」不会再被挤到第二行）（本版 m9：只改了搜索热点算法 —— 长题干 / 整题粘贴不再卡死，检索结果、排序、相似度判定与旧版完全一致；电脑版 v1.0.73 的「全题库查重」是题库管理功能，暂未移植到手机版）（修复：<b>「AI 精读 → 自动搜题」不再被本地 OCR 质量卡死</b> —— 上一版把"达标才自动搜"的判断锁在本地 OCR 那一瞬，像「城市更新十五五规划」这种带书名号的长题干、四个长选项，本地 OCR 容易把 A/B/C/D 标号数丢，导致选项判成不足、自动链第一步就断、停在识别页不跳转；本版改为：只要快捷指令进来、开关开着，就先无条件跑 AI 精读（AI 看的是原图，本地 OCR 再烂也不影响），精读拿到结构化结果后再判断"题干≥8字且选项≥2"才自动搜）；<b>v1.0.74</b>：①整题"题干+选项逐字包含"最高优先级排序，选项短的精确题也能排第1（修：国家鼓励投保被挤到75%、井下电气选型被挤到67%）；②"AI精读→自动搜题"去掉"选项≥2个"门槛，选项没读到也自动搜（修：采煤工作面…只显示"没有选项"不搜）；③搜题作用域(题库)持久化，OCR/快捷指令/历史找回自动沿用上次选的库，不用每次重选）</div>
     <div class="card" style="border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:14px;">
       <div style="font-weight:600;margin-bottom:6px;">本地文件夹保存（防浏览器清理）</div>
       <div id="folderStatus" class="muted" style="margin-bottom:8px;font-weight:400;"></div>
@@ -2134,6 +2147,12 @@ function qCardFull(i,idx,pct,hlParam){
   const opts=hl?renderOptsOrInline(i,correct).replace(/>([^<>]+)</g,function(_,t){return '>'+t.replace(hl.re,function(m){return '<mark class="hl">'+m+'</mark>'})+'<'}):renderOptsOrInline(i,correct);
   const starLabel=(i.starred?'★ 已收藏':'☆ 收藏');
   const starBtn='<button class="mini '+(i.starred?'starred':'')+'" onclick="toggleStar(\''+i.id+'\',event)">'+starLabel+'</button>';
+  /* v1.2.1：填空题 / 简答题这类长答案，卡片上直接给一个「复制」（手机上长按拖选太费劲）
+     注意位置：手机端按钮行塞不下第 5 个（实测 4 个已占 277px / 容器 276px），
+     所以这个键是浮在答案框右上角的，见上方 .ans .anscopy 的 float 说明 */
+  const copyBtn=isLongAnswerItem(i)
+    ?'<button class="anscopy" onclick="copyAnswer(\''+i.id+'\',event)" title="一键复制这道题的答案（共 '+String(i.a==null?"":i.a).length+' 字）">⧉ 复制答案</button>'
+    :'';
   // v1.0.59：相关度百分比 + 命中块数（纯展示，排序算法未改动）
   let rel='';
   if(pct!=null||hl){
@@ -2144,10 +2163,80 @@ function qCardFull(i,idx,pct,hlParam){
       +'</span>';
   }
   return '<div class="qcard"><div class="qh"><span class="idx">'+idx+'.</span><span>'+qHtml+'</span>'+cat+rel+'</div>'+img+opts
-    +'<div class="ans"><span class="lab">答案</span>'+esc(i.a)+'</div>'+note
+    +'<div class="ans">'+copyBtn+'<span class="lab">答案</span>'+esc(i.a)+'</div>'+note
     +'<div class="ops">'+starBtn
       +(i.note?'':'<button class="mini" onclick="aiNoteOne(\''+i.id+'\',event)" title="让 AI 生成这道题的解析（联网，约 1~3 秒）">✨ AI 解析</button>')
       +'<button class="mini" onclick="editItem(\''+i.id+'\')">编辑</button><button class="mini del" onclick="delItem(\''+i.id+'\')">删除</button></div></div>';
+}
+
+/* ============================================================
+   v1.2.1：搜题结果卡片「一键复制答案」
+   ------------------------------------------------------------
+   为什么需要：填空题 / 简答题的答案动辄 100~300 字，手机上长按拖选时
+   两个选择柄很难精确落到段首段尾，抄一条答案要折腾十几秒。
+   ------------------------------------------------------------
+   环境差异（电脑版与手机版共用这段代码，改的时候两边都要看）：
+   · 电脑版跑在 Electron 的 file:// 里，手机版跑在 iOS WKWebView 里，
+     两者都**不是安全上下文**，navigator.clipboard 可能直接是 undefined；
+   · 所以必须保留 execCommand('copy') 兜底，而且 execCommand 必须在
+     点击事件的**同步栈**里执行 —— 一旦先 await 过任何东西，WKWebView
+     就不再认这个用户手势，复制会静默失败。
+   顺序：先同步 execCommand → 失败才试异步 clipboard API。
+   ============================================================ */
+function isLongAnswerItem(it){
+  const ty=String((it&&it.type)||"");
+  /* 题型优先：填空 / 简答，以及案例、材料、论述、名词解释这些人工评分题型 */
+  if(/填空|简答|案例|材料|论述|名词解释|计算|分析/.test(ty))return true;
+  /* 兜底：任何题型只要答案够长（≥25 字）也给复制键 —— 判断题偶尔也有整段答案 */
+  return String((it&&it.a)||"").length>=25;
+}
+/* 同步复制：iOS WKWebView / Electron file:// 下唯一稳定的路子 */
+function execCopyText(t){
+  let ta=null;
+  try{
+    const sy=window.pageYOffset||document.documentElement.scrollTop||0;
+    ta=document.createElement("textarea");
+    ta.value=t;
+    ta.setAttribute("readonly","");
+    /* iOS 要求元素可见、可聚焦才肯复制：不能 display:none，也不能挪到屏幕外太远 */
+    ta.style.cssText="position:fixed;left:0;top:0;width:1px;height:1px;padding:0;border:0;outline:0;box-shadow:none;background:transparent;opacity:.01;z-index:-1;font-size:16px;";
+    document.body.appendChild(ta);
+    try{ta.focus({preventScroll:true});}catch(e){ta.focus();}
+    ta.select();
+    if(ta.setSelectionRange){try{ta.setSelectionRange(0,t.length);}catch(e){}}
+    const ok=document.execCommand("copy");
+    document.body.removeChild(ta);ta=null;
+    /* 还原滚动位置：iOS 上 focus 偶尔会把页面顶回最上面 */
+    if(sy)window.scrollTo(0,sy);
+    return ok;
+  }catch(e){
+    try{if(ta&&ta.parentNode)ta.parentNode.removeChild(ta);}catch(e2){}
+    return false;
+  }
+}
+function copyAnswer(id,ev){
+  if(ev&&ev.stopPropagation)ev.stopPropagation();
+  const btn=ev&&ev.currentTarget;
+  const it=(DATA.items||[]).find(x=>x.id===id);
+  if(!it){toast("没找到这道题");return;}
+  const txt=String(it.a==null?"":it.a).trim();
+  if(!txt){toast("这道题还没有答案可复制");return;}
+  const done=()=>{
+    toast("答案已复制（"+txt.length+" 字），可粘贴到答题卡或笔记");
+    /* 手机上 toast 会飘走，按钮自己也变一下色，确认这次点击生效了 */
+    if(btn&&btn.classList&&!btn.dataset.busy){
+      const old=btn.innerHTML;
+      btn.dataset.busy="1";
+      btn.classList.add("done");btn.innerHTML="✓ 已复制";
+      setTimeout(()=>{btn.classList.remove("done");btn.innerHTML=old;delete btn.dataset.busy;},1200);
+    }
+  };
+  if(execCopyText(txt)){done();return;}
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(txt).then(done,()=>toast("复制失败，请长按答案手动选中复制"));
+    return;
+  }
+  toast("复制失败，请长按答案手动选中复制");
 }
 function fillSearchFilters(){
   const cats=[...new Set(DATA.items.map(i=>i.cat).filter(Boolean))].sort();
