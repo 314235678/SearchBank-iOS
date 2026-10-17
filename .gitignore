@@ -26,6 +26,7 @@ _cmsg*.txt
 test/_stub-persist.json
 # 本机查 CI / 下载产物的小工具（写死了本机代理，不进仓库）
 _ci_status.py
+_ci_wait.py
 _commitmsg*.txt
 _push.log
 _trace.log
